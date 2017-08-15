@@ -19,8 +19,17 @@ impl fmt::Display for Term {
             True => write!(f, "true"),
             False => write!(f, "false"),
             If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
-            Zero => write!(f, "zero"),
-            Succ(ref t0) => write!(f, "succ {}", t0),
+            Zero => write!(f, "0"),
+            Succ(ref t0) => {
+                fn recurse(n: u32, t: &Box<Term>, f: &mut fmt::Formatter) -> fmt::Result {
+                    match *t {
+                        box Zero => write!(f, "{}", n),
+                        box Succ(ref s) => recurse(n + 1, s, f),
+                        _ => write!(f, "(succ {})", t),
+                    }
+                }
+                recurse(1, t0, f)
+            }
             Pred(ref t0) => write!(f, "pred {}", t0),
             IsZero(ref t0) => write!(f, "iszero {}", t0),
         }
@@ -130,6 +139,7 @@ pub fn run(s: &str) -> Result<String, RunError> {
 
 #[cfg(test)]
 mod tests {
+    use super::run;
     use super::Term::*;
     use super::is_numeric_val;
     use super::parser::parse;
@@ -137,6 +147,24 @@ mod tests {
     #[test]
     fn eval_test() {
         assert!(is_numeric_val(&Zero));
+    }
+
+    #[test]
+    fn run_test() {
+        assert_eq!(run("succ (succ zero)").ok().unwrap(), "2");
+        assert_eq!(run("succ (pred zero)").ok().unwrap(), "1");
+        assert_eq!(run("pred (succ zero)").ok().unwrap(), "0");
+        assert_eq!(
+            run("iszero (pred (succ (succ zero)))").ok().unwrap(),
+            "false"
+        );
+        assert_eq!(
+            run("if (iszero (succ zero)) then (succ zero) else (pred zero)")
+                .ok()
+                .unwrap(),
+            "0"
+        );
+        assert_eq!(run("pred (succ (succ (succ zero)))").ok().unwrap(), "2");
     }
 
     #[test]
