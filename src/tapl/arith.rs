@@ -21,14 +21,14 @@ impl fmt::Display for Term {
             If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
             Zero => write!(f, "0"),
             Succ(ref t0) => {
-                fn recurse(n: u32, t: &Box<Term>, f: &mut fmt::Formatter) -> fmt::Result {
+                fn go(n: u32, t: &Box<Term>, f: &mut fmt::Formatter) -> fmt::Result {
                     match *t {
                         box Zero => write!(f, "{}", n),
-                        box Succ(ref s) => recurse(n + 1, s, f),
+                        box Succ(ref s) => go(n + 1, s, f),
                         _ => write!(f, "(succ {})", t),
                     }
                 }
-                recurse(1, t0, f)
+                go(1, t0, f)
             }
             Pred(ref t0) => write!(f, "pred {}", t0),
             IsZero(ref t0) => write!(f, "iszero {}", t0),
