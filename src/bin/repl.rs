@@ -14,7 +14,7 @@ fn main() {
         input.trim();
         match arith::run(&input) {
             Ok(s) => println!("{}", s),
-            _     => println!("Error"),
+            _ => println!("Error"),
         }
         input.clear();
     }

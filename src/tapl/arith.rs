@@ -175,7 +175,7 @@ mod tests {
             parse(b"iszero (pred (succ (succ zero)))"),
             Some(IsZero(Box::new(
                 Pred(Box::new(Succ(Box::new(Succ(Box::new(Zero)))))),
-            )))
+            ),),)
         );
     }
 }

@@ -21,16 +21,28 @@ struct Context {
     contexts: Vec<NameBinding>,
 }
 
+#[derive(Debug)]
+enum ContextError {
+    UnboundIdentifier(String),
+    VariableLookupFailure(u32, usize),
+}
+
 impl Context {
     fn new() -> Context {
-        Context { contexts: Vec::new() }
+        Context {
+            contexts: Vec::new(),
+        }
     }
 
     fn is_name_bound(&self, name: &str) -> bool {
         fn walk(slc: &[NameBinding], name: String) -> bool {
             match *slc {
                 [] => false,
-                [ref h, ref t..] => if h.name == name { true } else { walk(t, name) },
+                [ref h, ref t..] => if h.name == name {
+                    true
+                } else {
+                    walk(t, name)
+                },
             }
         }
         walk(self.contexts.as_slice(), name.to_owned())
@@ -50,6 +62,33 @@ impl Context {
             (newc, nb)
         }
     }
+
+    fn index_to_name(&self, idx: u32) -> Result<NameBinding, ContextError> {
+        if idx as usize > self.contexts.len() {
+            Err(ContextError::VariableLookupFailure(
+                idx,
+                self.contexts.len(),
+            ))
+        } else {
+            let a = &self.contexts[idx as usize];
+            Ok(a.clone())
+        }
+    }
+
+    fn name_to_index(&self, name: &str) -> Result<u32, ContextError> {
+        fn walk(slc: &[NameBinding], name: String, i: u32) -> Result<u32, ContextError> {
+            match *slc {
+                [] => Err(ContextError::UnboundIdentifier(name)),
+                [ref h, ref t..] => if h.name == name {
+                    Ok(i)
+                } else {
+                    walk(t, name, i + 1)
+                },
+            }
+        }
+
+        walk(self.contexts.as_slice(), name.to_owned(), 0)
+    }
 }
 
 use self::Term::*;
@@ -58,13 +97,11 @@ impl Term {
     fn term_shift(&self, d: u32) -> Term {
         fn walk(d: u32, c: u32, t: &Term) -> Term {
             match *t {
-                Var(x, n) => {
-                    if x >= c {
-                        Var(x + d, n + d)
-                    } else {
-                        Var(x, n + d)
-                    }
-                }
+                Var(x, n) => if x >= c {
+                    Var(x + d, n + d)
+                } else {
+                    Var(x, n + d)
+                },
                 Abs(ref x, ref t1) => Abs(x.clone(), Box::new(walk(d, c + 1, t1))),
                 App(ref t1, ref t2) => App(Box::new(walk(d, c, t1)), Box::new(walk(d, c, t2))),
             }
@@ -75,13 +112,11 @@ impl Term {
     fn term_subst(&self, j: u32, s: &Term) -> Term {
         fn walk(j: u32, s: &Term, c: u32, t: &Term) -> Term {
             match *t {
-                Var(x, n) => {
-                    if x == j + c {
-                        s.term_shift(c)
-                    } else {
-                        Var(x, n)
-                    }
-                }
+                Var(x, n) => if x == j + c {
+                    s.term_shift(c)
+                } else {
+                    Var(x, n)
+                },
                 Abs(ref x, ref t1) => Abs(x.clone(), Box::new(walk(j, s, c + 1, t1))),
                 App(ref t1, ref t2) => {
                     App(Box::new(walk(j, s, c, t1)), Box::new(walk(j, s, c, t2)))
@@ -133,6 +168,10 @@ mod tests {
             name: "a".to_string(),
             binding: NameBind,
         });
+        c.contexts.push(NameBinding {
+            name: "b".to_string(),
+            binding: NameBind,
+        });
         let (_, name) = c.pick_fresh_name("a");
         assert_eq!(
             name,
@@ -141,11 +180,19 @@ mod tests {
                 binding: NameBind,
             }
         );
-        let (_, name) = c.pick_fresh_name("b");
+        let (_, name) = c.pick_fresh_name("c");
         assert_eq!(
             name,
             NameBinding {
-                name: "b".to_string(),
+                name: "c".to_string(),
+                binding: NameBind,
+            }
+        );
+        assert_eq!(c.name_to_index("b").ok().unwrap(), 1);
+        assert_eq!(
+            c.index_to_name(0).ok().unwrap(),
+            NameBinding {
+                name: "a".to_string(),
                 binding: NameBind,
             }
         );
