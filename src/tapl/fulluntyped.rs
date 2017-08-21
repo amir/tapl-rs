@@ -5,15 +5,18 @@ pub enum Term {
     App(Box<Term>, Box<Term>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Binding {
     NameBind,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct NameBinding {
     name: String,
     binding: Binding,
 }
 
+#[derive(Clone)]
 struct Context {
     contexts: Vec<NameBinding>,
 }
@@ -23,14 +26,29 @@ impl Context {
         Context { contexts: Vec::new() }
     }
 
-    fn is_name_bound(&self, name: String) -> bool {
+    fn is_name_bound(&self, name: &str) -> bool {
         fn walk(slc: &[NameBinding], name: String) -> bool {
             match *slc {
                 [] => false,
                 [ref h, ref t..] => if h.name == name { true } else { walk(t, name) },
             }
         }
-        walk(self.contexts.as_slice(), name)
+        walk(self.contexts.as_slice(), name.to_owned())
+    }
+
+    fn pick_fresh_name(&self, x: &str) -> (Context, NameBinding) {
+        let s = x.to_owned();
+        if self.is_name_bound(x) {
+            self.pick_fresh_name(&(s + "'"))
+        } else {
+            let nb = NameBinding {
+                name: s,
+                binding: Binding::NameBind,
+            };
+            let mut newc = (*self).clone();
+            newc.contexts.push(nb.clone());
+            (newc, nb)
+        }
     }
 }
 
@@ -98,12 +116,38 @@ mod tests {
     }
 
     #[test]
-    fn context_test() {
+    fn is_name_bound_test() {
         let mut c = Context::new();
         c.contexts.push(NameBinding {
             name: "a".to_string(),
             binding: NameBind,
         });
-        assert!(c.is_name_bound("a".to_string()));
+        assert!(c.is_name_bound("a"));
+        assert!(!c.is_name_bound("b"));
+    }
+
+    #[test]
+    fn pick_fresh_name_test() {
+        let mut c = Context::new();
+        c.contexts.push(NameBinding {
+            name: "a".to_string(),
+            binding: NameBind,
+        });
+        let (_, name) = c.pick_fresh_name("a");
+        assert_eq!(
+            name,
+            NameBinding {
+                name: "a'".to_string(),
+                binding: NameBind,
+            }
+        );
+        let (_, name) = c.pick_fresh_name("b");
+        assert_eq!(
+            name,
+            NameBinding {
+                name: "b".to_string(),
+                binding: NameBind,
+            }
+        );
     }
 }
