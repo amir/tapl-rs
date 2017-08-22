@@ -188,6 +188,103 @@ impl<'a> fmt::Display for ContextTerm<'a> {
     }
 }
 
+mod parser {
+    extern crate nom;
+
+    use std::str;
+
+    use nom::multispace;
+    use nom::alphanumeric;
+    use nom::IResult;
+
+    use super::Term;
+    use super::Term::*;
+    use super::Context;
+
+    type Result = Box<Fn(Context) -> Term>;
+
+    fn tos(s: &[u8]) -> String {
+        str::from_utf8(s).unwrap().to_owned()
+    }
+
+    fn is_alphabetic(chr: u8) -> bool {
+        (chr >= 0x41 && chr <= 0x5A) || (chr >= 0x61 && chr <= 0x7A)
+    }
+
+    fn is_digit(chr: u8) -> bool {
+        chr >= 0x30 && chr <= 0x39
+    }
+
+    fn is_prime(chr: u8) -> bool {
+        chr == 0x27
+    }
+
+    fn is_identifier(chr: u8) -> bool {
+        is_alphabetic(chr) || is_digit(chr) || is_prime(chr)
+    }
+
+    named!(identifier, take_while1!(is_identifier));
+
+    named!(term_var <&[u8], Result>,
+           map!(identifier, |x| {
+               let s = tos(x);
+               Box::new(move |ctx: Context| -> Term {
+                   match ctx.name_to_index(&s) {
+                       Ok(n1) => Var(n1, ctx.contexts.len() as u32),
+                       Err(e) => {
+                           panic!(e)
+                       }
+                   }
+               })
+           }));
+
+    named!(term_app <&[u8], Result>,
+           do_parse!(
+               char!('(')       >>
+               opt!(multispace) >>
+               t1: term         >>
+               multispace       >>
+               t2: term         >>
+               opt!(multispace) >>
+               char!(')')       >>
+               (Box::new(move |ctx: Context| -> Term {
+                    App(Box::new(Var(0, 2)), Box::new(Var(1, 2)))
+               }))
+           ));
+
+    named!(term_abs <&[u8], Result>,
+        do_parse!(
+            char!('(')       >>
+            opt!(multispace) >>
+            tag!("lambda")   >>
+            multispace       >>
+            x: identifier    >>
+            opt!(multispace) >>
+            char!('.')       >>
+            multispace       >>
+            t1: term         >>
+            opt!(multispace) >>
+            char!(')')       >>
+            ({
+                let s = tos(x);
+                Box::new(move |ctx: Context| -> Term {
+                    let (c2, x2) = ctx.pick_fresh_name(&s);
+                    Abs(x2.name, Box::new(t1(c2)))
+                })
+            })
+        )
+    );
+
+    named!(term <&[u8], Result>, alt!(term_var | term_app | term_abs));
+
+    pub fn parse(s: &[u8]) -> Option<Term> {
+        match term(s) {
+            IResult::Done(_, res) => Some((*res)(Context::new())),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Term::*;
@@ -269,5 +366,21 @@ mod tests {
             )),
         );
         assert_eq!(app.to_string(), "(lambda a. (lambda a'. (a a')))");
+    }
+
+    #[test]
+    fn parse_test() {
+        use super::parser::parse;
+
+        assert_eq!(
+            parse(b"(lambda a. (lambda a'. (a a')))"),
+            Some(Abs(
+                "a".to_string(),
+                Box::new(Abs(
+                    "a'".to_string(),
+                    Box::new(App(Box::new(Var(0, 2)), Box::new(Var(1, 2))))
+                ))
+            ))
+        );
     }
 }
