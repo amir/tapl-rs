@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq)]
+use std::fmt;
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Term {
     Var(u32, u32),
     Abs(String, Box<Term>),
@@ -16,7 +18,7 @@ struct NameBinding {
     binding: Binding,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Context {
     contexts: Vec<NameBinding>,
 }
@@ -64,7 +66,7 @@ impl Context {
     }
 
     fn index_to_name(&self, idx: u32) -> Result<NameBinding, ContextError> {
-        if idx as usize > self.contexts.len() {
+        if idx as usize >= self.contexts.len() {
             Err(ContextError::VariableLookupFailure(
                 idx,
                 self.contexts.len(),
@@ -124,6 +126,65 @@ impl Term {
             }
         }
         walk(j, s, 0, self)
+    }
+}
+
+impl fmt::Display for Term {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            ContextTerm {
+                context: &Context::new(),
+                term: self,
+            }
+        )
+    }
+}
+
+impl fmt::Display for NameBinding {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+struct ContextTerm<'a> {
+    context: &'a Context,
+    term: &'a Term,
+}
+
+impl<'a> fmt::Display for ContextTerm<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self.term {
+            Var(x, _) => match self.context.index_to_name(x) {
+                Ok(n2) => write!(f, "{}", n2),
+                Err(e) => write!(f, "{:?}", e),
+            },
+            Abs(ref x, ref t1) => {
+                let (ctx1, x1) = self.context.pick_fresh_name(x);
+                write!(
+                    f,
+                    "(lambda {}. {})",
+                    x1,
+                    ContextTerm {
+                        context: &ctx1,
+                        term: t1,
+                    }
+                )
+            }
+            App(ref t1, ref t2) => write!(
+                f,
+                "({} {})",
+                ContextTerm {
+                    context: self.context,
+                    term: t1,
+                },
+                ContextTerm {
+                    context: self.context,
+                    term: t2,
+                }
+            ),
+        }
     }
 }
 
@@ -196,5 +257,17 @@ mod tests {
                 binding: NameBind,
             }
         );
+    }
+
+    #[test]
+    fn display_test() {
+        let app = Abs(
+            "a".to_string(),
+            Box::new(Abs(
+                "a".to_string(),
+                Box::new(App(Box::new(Var(0, 2)), Box::new(Var(1, 2)))),
+            )),
+        );
+        assert_eq!(app.to_string(), "(lambda a. (lambda a'. (a a')))");
     }
 }
