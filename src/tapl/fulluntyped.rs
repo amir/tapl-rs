@@ -194,7 +194,6 @@ mod parser {
     use std::str;
 
     use nom::multispace;
-    use nom::alphanumeric;
     use nom::IResult;
 
     use super::Term;
@@ -283,6 +282,10 @@ mod parser {
             _ => None,
         }
     }
+}
+
+pub fn run(s: &str) -> Option<Term> {
+    parser::parse(s.as_bytes())
 }
 
 #[cfg(test)]

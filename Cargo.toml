@@ -5,3 +5,11 @@ authors = ["Amir Saeid <amir@glgdgt.com>"]
 
 [dependencies]
 nom = "3.2.0"
+
+[[bin]]
+name = "arith"
+path = "src/bin/arith.rs"
+
+[[bin]]
+name = "fulluntyped"
+path = "src/bin/fulluntyped.rs"
