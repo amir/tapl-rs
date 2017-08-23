@@ -60,7 +60,7 @@ impl Context {
                 binding: Binding::NameBind,
             };
             let mut newc = (*self).clone();
-            newc.contexts.push(nb.clone());
+            newc.contexts.insert(0, nb.clone());
             (newc, nb)
         }
     }
