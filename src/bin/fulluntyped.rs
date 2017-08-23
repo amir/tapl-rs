@@ -13,7 +13,7 @@ fn main() {
         io::stdin().read_line(&mut input).expect("read_line error");
         input.trim();
         match fulluntyped::run(&input) {
-            Some(s) => println!("{}", s),
+            Ok(s) => println!("{}", s),
             _ => println!("Error"),
         }
         input.clear();

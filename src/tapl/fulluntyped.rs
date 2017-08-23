@@ -95,26 +95,38 @@ impl Context {
 
 use self::Term::*;
 
+enum EvalError {
+    NoRuleApplies(Term),
+}
+
+pub enum RunError {
+    ParseError,
+}
+
+fn term_subst_top(s: &Term, t: &Term) -> Term {
+    t.term_subst(0, &s.term_shift(1)).term_shift(-1)
+}
+
 impl Term {
-    fn term_shift(&self, d: u32) -> Term {
-        fn walk(d: u32, c: u32, t: &Term) -> Term {
+    fn term_shift(&self, d: i32) -> Term {
+        fn walk(d: i32, c: i32, t: &Term) -> Term {
             match *t {
-                Var(x, n) => if x >= c {
-                    Var(x + d, n + d)
+                Var(x, n) => if x as i32 >= c {
+                    Var((x as i32 + d) as u32, (n as i32 + d) as u32)
                 } else {
-                    Var(x, n + d)
+                    Var(x, (n as i32 + d) as u32)
                 },
-                Abs(ref x, ref t1) => Abs(x.clone(), Box::new(walk(d, c + 1, t1))),
+                Abs(ref x, ref t2) => Abs(x.clone(), Box::new(walk(d, c + 1, t2))),
                 App(ref t1, ref t2) => App(Box::new(walk(d, c, t1)), Box::new(walk(d, c, t2))),
             }
         }
         walk(d, 0, self)
     }
 
-    fn term_subst(&self, j: u32, s: &Term) -> Term {
-        fn walk(j: u32, s: &Term, c: u32, t: &Term) -> Term {
+    fn term_subst(&self, j: i32, s: &Term) -> Term {
+        fn walk(j: i32, s: &Term, c: i32, t: &Term) -> Term {
             match *t {
-                Var(x, n) => if x == j + c {
+                Var(x, n) => if x as i32 == j + c {
                     s.term_shift(c)
                 } else {
                     Var(x, n)
@@ -126,6 +138,29 @@ impl Term {
             }
         }
         walk(j, s, 0, self)
+    }
+
+    fn is_val(&self) -> bool {
+        match *self {
+            Abs(_, _) => true,
+            _ => false,
+        }
+    }
+
+    fn eval1(&self, ctx: &Context) -> Result<Term, EvalError> {
+        match *self {
+            App(box Abs(_, ref t12), ref v2) if v2.is_val() => Ok(term_subst_top(v2, t12)),
+            App(ref v1, ref t2) if v1.is_val() => Ok(App(v1.clone(), Box::new(t2.eval1(ctx)?))),
+            App(ref t1, ref t2) => Ok(App(Box::new(t1.eval1(ctx)?), t2.clone())),
+            _ => Err(EvalError::NoRuleApplies(self.clone())),
+        }
+    }
+
+    fn eval(&self, ctx: &Context) -> Term {
+        match self.eval1(ctx) {
+            Ok(t) => t.eval(ctx),
+            Err(EvalError::NoRuleApplies(_)) => self.clone(),
+        }
     }
 }
 
@@ -247,7 +282,7 @@ mod parser {
                opt!(multispace) >>
                char!(')')       >>
                (Box::new(move |ctx: Context| -> Term {
-                    App(Box::new(Var(0, 2)), Box::new(Var(1, 2)))
+                    App(Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone())))
                }))
            ));
 
@@ -284,8 +319,13 @@ mod parser {
     }
 }
 
-pub fn run(s: &str) -> Option<Term> {
+pub fn run(s: &str) -> Result<String, RunError> {
+    println!("PARSED: ");
+    println!("{:?}", parser::parse(s.as_bytes()));
     parser::parse(s.as_bytes())
+        .map(|t| t.eval(&Context::new()))
+        .map(|t| t.to_string())
+        .ok_or(RunError::ParseError)
 }
 
 #[cfg(test)]
