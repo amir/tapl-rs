@@ -65,6 +65,17 @@ impl Context {
         }
     }
 
+    fn add_binding(&self, x: &str) -> (Context, NameBinding) {
+        let s = x.to_owned();
+        let nb = NameBinding {
+            name: s,
+            binding: Binding::NameBind,
+        };
+        let mut newc = (*self).clone();
+        newc.contexts.insert(0, nb.clone());
+        (newc, nb)
+    }
+
     fn index_to_name(&self, idx: u32) -> Result<NameBinding, ContextError> {
         if idx as usize >= self.contexts.len() {
             Err(ContextError::VariableLookupFailure(
@@ -302,8 +313,8 @@ mod parser {
             ({
                 let s = tos(x);
                 Box::new(move |ctx: Context| -> Term {
-                    let (c2, x2) = ctx.pick_fresh_name(&s);
-                    Abs(x2.name, Box::new(t1(c2)))
+                    let (c2, x2) = ctx.add_binding(&s);
+                    Abs(s.clone(), Box::new(t1(c2)))
                 })
             })
         )
@@ -320,8 +331,6 @@ mod parser {
 }
 
 pub fn run(s: &str) -> Result<String, RunError> {
-    println!("PARSED: ");
-    println!("{:?}", parser::parse(s.as_bytes()));
     parser::parse(s.as_bytes())
         .map(|t| t.eval(&Context::new()))
         .map(|t| t.to_string())

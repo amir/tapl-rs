@@ -13,5 +13,5 @@ true
 ```
 $ rustup run nightly cargo run --bin fulluntyped
 > (lambda a. (lambda a. (a a)))
-(lambda a. (lambda a'. (a a')))
+(lambda a. (lambda a'. (a' a')))
 ```
