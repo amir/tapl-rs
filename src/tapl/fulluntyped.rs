@@ -2,6 +2,9 @@ use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Term {
+    True,
+    False,
+    If(Box<Term>, Box<Term>, Box<Term>),
     Var(u32, u32),
     Abs(String, Box<Term>),
     App(Box<Term>, Box<Term>),
@@ -129,6 +132,13 @@ impl Term {
                 },
                 Abs(ref x, ref t2) => Abs(x.clone(), Box::new(walk(d, c + 1, t2))),
                 App(ref t1, ref t2) => App(Box::new(walk(d, c, t1)), Box::new(walk(d, c, t2))),
+                True => True,
+                False => False,
+                If(ref t1, ref t2, ref t3) => If(
+                    Box::new(walk(d, c, t1)),
+                    Box::new(walk(d, c, t2)),
+                    Box::new(walk(d, c, t3)),
+                ),
             }
         }
         walk(d, 0, self)
@@ -146,6 +156,13 @@ impl Term {
                 App(ref t1, ref t2) => {
                     App(Box::new(walk(j, s, c, t1)), Box::new(walk(j, s, c, t2)))
                 }
+                True => True,
+                False => False,
+                If(ref t1, ref t2, ref t3) => If(
+                    Box::new(walk(j, s, c, t1)),
+                    Box::new(walk(j, s, c, t2)),
+                    Box::new(walk(j, s, c, t3)),
+                ),
             }
         }
         walk(j, s, 0, self)
@@ -153,6 +170,8 @@ impl Term {
 
     fn is_val(&self) -> bool {
         match *self {
+            True => true,
+            False => true,
             Abs(_, _) => true,
             _ => false,
         }
@@ -160,6 +179,9 @@ impl Term {
 
     fn eval1(&self, ctx: &Context) -> Result<Term, EvalError> {
         match *self {
+            If(box True, ref t2, _) => Ok(*t2.clone()),
+            If(box False, _, ref t3) => Ok(*t3.clone()),
+            If(ref t1, ref t2, ref t3) => Ok(If(Box::new(t1.eval1(ctx)?), t2.clone(), t3.clone())),
             App(box Abs(_, ref t12), ref v2) if v2.is_val() => Ok(term_subst_top(v2, t12)),
             App(ref v1, ref t2) if v1.is_val() => Ok(App(v1.clone(), Box::new(t2.eval1(ctx)?))),
             App(ref t1, ref t2) => Ok(App(Box::new(t1.eval1(ctx)?), t2.clone())),
@@ -230,6 +252,9 @@ impl<'a> fmt::Display for ContextTerm<'a> {
                     term: t2,
                 }
             ),
+            True => write!(f, "true"),
+            False => write!(f, "false"),
+            If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
         }
     }
 }
@@ -271,31 +296,32 @@ mod parser {
     named!(identifier, take_while1!(is_identifier));
 
     named!(term_var <&[u8], Result>,
-           map!(identifier, |x| {
-               let s = tos(x);
-               Box::new(move |ctx: Context| -> Term {
-                   match ctx.name_to_index(&s) {
-                       Ok(n1) => Var(n1, ctx.contexts.len() as u32),
-                       Err(e) => {
-                           panic!(e)
-                       }
-                   }
-               })
-           }));
+    map!(identifier, |x| {
+        let s = tos(x);
+        Box::new(move |ctx: Context| -> Term {
+            match ctx.name_to_index(&s) {
+                Ok(n1) => Var(n1, ctx.contexts.len() as u32),
+                Err(e) => {
+                    println!("{:?}", e);
+                    panic!(e)
+                }
+            }
+        })
+    }));
 
     named!(term_app <&[u8], Result>,
-           do_parse!(
-               char!('(')       >>
-               opt!(multispace) >>
-               t1: term         >>
-               multispace       >>
-               t2: term         >>
-               opt!(multispace) >>
-               char!(')')       >>
-               (Box::new(move |ctx: Context| -> Term {
-                    App(Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone())))
-               }))
-           ));
+    do_parse!(
+        char!('(')       >>
+        opt!(multispace) >>
+        t1: term         >>
+        multispace       >>
+        t2: term         >>
+        opt!(multispace) >>
+        char!(')')       >>
+        (Box::new(move |ctx: Context| -> Term {
+             App(Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone())))
+        }))
+    ));
 
     named!(term_abs <&[u8], Result>,
         do_parse!(
@@ -320,7 +346,32 @@ mod parser {
         )
     );
 
-    named!(term <&[u8], Result>, alt!(term_var | term_app | term_abs));
+    named!(term_if <&[u8], Result>,
+        do_parse!(
+            opt!(complete!(char!('('))) >>
+            tag!("if")   >> multispace >> t0: term >> multispace >>
+            tag!("then") >> multispace >> t1: term >> multispace >>
+            tag!("else") >> multispace >> t2: term >>
+            opt!(complete!(char!(')'))) >>
+            (Box::new(move |ctx: Context| -> Term {
+                (If(Box::new(t0(ctx.clone())), Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone()))))
+            }))
+        )
+    );
+
+    named!(term_bools1 <&[u8], Term>, alt!(
+            tag!("true")  => { |_| True  } |
+            tag!("false") => { |_| False }
+        )
+    );
+
+    named!(term_bools <&[u8], Result>, map!(term_bools1, |x| {
+        Box::new(move |ctx: Context| -> Term {
+            x.clone()
+        })
+    }));
+
+    named!(term <&[u8], Result>, alt!(term_if | term_bools | term_var | term_app | term_abs));
 
     pub fn parse(s: &[u8]) -> Option<Term> {
         match term(s) {
