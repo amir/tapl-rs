@@ -314,32 +314,34 @@ mod parser {
     named!(identifier, take_while1!(is_identifier));
 
     named!(term_var <&[u8], Result>,
-    map!(identifier, |x| {
-        let s = tos(x);
-        Box::new(move |ctx: Context| -> Term {
-            match ctx.name_to_index(&s) {
-                Ok(n1) => Var(n1, ctx.contexts.len() as u32),
-                Err(e) => {
-                    println!("{:?}", e);
-                    panic!(e)
+        map!(identifier, |x| {
+            let s = tos(x);
+            Box::new(move |ctx: Context| -> Term {
+                match ctx.name_to_index(&s) {
+                    Ok(n1) => Var(n1, ctx.contexts.len() as u32),
+                    Err(e) => {
+                        println!("{:?}", e);
+                        panic!(e)
+                    }
                 }
-            }
+            })
         })
-    }));
+    );
 
     named!(term_app <&[u8], Result>,
-    do_parse!(
-        char!('(')       >>
-        opt!(multispace) >>
-        t1: term         >>
-        multispace       >>
-        t2: term         >>
-        opt!(multispace) >>
-        char!(')')       >>
-        (Box::new(move |ctx: Context| -> Term {
-             App(Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone())))
-        }))
-    ));
+        do_parse!(
+            char!('(')       >>
+            opt!(multispace) >>
+            t1: term         >>
+            multispace       >>
+            t2: term         >>
+            opt!(multispace) >>
+            char!(')')       >>
+            (Box::new(move |ctx: Context| -> Term {
+                 App(Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone())))
+            }))
+        )
+    );
 
     named!(term_abs <&[u8], Result>,
         do_parse!(
@@ -372,7 +374,11 @@ mod parser {
             tag!("else") >> multispace >> t2: term >>
             opt!(complete!(char!(')'))) >>
             (Box::new(move |ctx: Context| -> Term {
-                (If(Box::new(t0(ctx.clone())), Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone()))))
+                If(
+                    Box::new(t0(ctx.clone())),
+                    Box::new(t1(ctx.clone())),
+                    Box::new(t2(ctx.clone()))
+                )
             }))
         )
     );
@@ -404,7 +410,9 @@ mod parser {
         )
     );
 
-    named!(term <&[u8], Result>, alt!(term_if | term_bools | term_let | term_var | term_app | term_abs));
+    named!(term <&[u8], Result>, alt!(
+        term_if | term_bools | term_let | term_var | term_app | term_abs
+    ));
 
     pub fn parse(s: &[u8]) -> Option<Term> {
         match term(s) {
