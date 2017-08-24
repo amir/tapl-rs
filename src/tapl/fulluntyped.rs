@@ -417,7 +417,7 @@ mod tests {
                 Box::new(App(Box::new(Var(0, 2)), Box::new(Var(1, 2)))),
             )),
         );
-        assert_eq!(app.to_string(), "(lambda a. (lambda a'. (a a')))");
+        assert_eq!(app.to_string(), "(lambda a. (lambda a'. (a' a)))");
     }
 
     #[test]
@@ -430,7 +430,7 @@ mod tests {
                 "a".to_string(),
                 Box::new(Abs(
                     "a'".to_string(),
-                    Box::new(App(Box::new(Var(0, 2)), Box::new(Var(1, 2))))
+                    Box::new(App(Box::new(Var(1, 2)), Box::new(Var(0, 2))))
                 ))
             ))
         );
