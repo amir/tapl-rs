@@ -21,10 +21,10 @@ impl fmt::Display for Term {
             If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
             Zero => write!(f, "0"),
             Succ(ref t0) => {
-                fn go(n: u32, t: &Box<Term>, f: &mut fmt::Formatter) -> fmt::Result {
+                fn go(n: u32, t: &Term, f: &mut fmt::Formatter) -> fmt::Result {
                     match *t {
-                        box Zero => write!(f, "{}", n),
-                        box Succ(ref s) => go(n + 1, s, f),
+                        Zero => write!(f, "{}", n),
+                        Succ(ref s) => go(n + 1, s, f),
                         _ => write!(f, "(succ {})", t),
                     }
                 }

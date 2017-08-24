@@ -22,7 +22,7 @@ struct NameBinding {
     binding: Binding,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Context {
     contexts: Vec<NameBinding>,
 }
@@ -34,7 +34,7 @@ enum ContextError {
 }
 
 impl Context {
-    pub fn new() -> Context {
+    pub fn new() -> Self {
         Context {
             contexts: Vec::new(),
         }
@@ -42,6 +42,10 @@ impl Context {
 
     pub fn len(&self) -> usize {
         self.contexts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.contexts.is_empty()
     }
 
     fn is_name_bound(&self, name: &str) -> bool {
@@ -185,8 +189,7 @@ impl Term {
 
     fn is_val(&self) -> bool {
         match *self {
-            True => true,
-            False => true,
+            True | False => true,
             Abs(_, _) => true,
             _ => false,
         }
