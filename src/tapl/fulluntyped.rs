@@ -8,6 +8,7 @@ pub enum Term {
     Var(u32, u32),
     Abs(String, Box<Term>),
     App(Box<Term>, Box<Term>),
+    Let(String, Box<Term>, Box<Term>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,7 +23,7 @@ struct NameBinding {
 }
 
 #[derive(Debug, Clone)]
-struct Context {
+pub struct Context {
     contexts: Vec<NameBinding>,
 }
 
@@ -33,10 +34,14 @@ enum ContextError {
 }
 
 impl Context {
-    fn new() -> Context {
+    pub fn new() -> Context {
         Context {
             contexts: Vec::new(),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.contexts.len()
     }
 
     fn is_name_bound(&self, name: &str) -> bool {
@@ -139,6 +144,11 @@ impl Term {
                     Box::new(walk(d, c, t2)),
                     Box::new(walk(d, c, t3)),
                 ),
+                Let(ref x, ref t1, ref t2) => Let(
+                    x.clone(),
+                    Box::new(walk(d, c, t1)),
+                    Box::new(walk(d, c + 1, t2)),
+                ),
             }
         }
         walk(d, 0, self)
@@ -163,6 +173,11 @@ impl Term {
                     Box::new(walk(j, s, c, t2)),
                     Box::new(walk(j, s, c, t3)),
                 ),
+                Let(ref x, ref t1, ref t2) => Let(
+                    x.clone(),
+                    Box::new(walk(j, s, c, t1)),
+                    Box::new(walk(j, s, c + 1, t2)),
+                ),
             }
         }
         walk(j, s, 0, self)
@@ -185,6 +200,8 @@ impl Term {
             App(box Abs(_, ref t12), ref v2) if v2.is_val() => Ok(term_subst_top(v2, t12)),
             App(ref v1, ref t2) if v1.is_val() => Ok(App(v1.clone(), Box::new(t2.eval1(ctx)?))),
             App(ref t1, ref t2) => Ok(App(Box::new(t1.eval1(ctx)?), t2.clone())),
+            Let(_, ref v1, ref t2) if v1.is_val() => Ok(term_subst_top(v1, t2)),
+            Let(ref x, ref t1, ref t2) => Ok(Let(x.clone(), Box::new(t1.eval1(ctx)?), t2.clone())),
             _ => Err(EvalError::NoRuleApplies(self.clone())),
         }
     }
@@ -255,6 +272,7 @@ impl<'a> fmt::Display for ContextTerm<'a> {
             True => write!(f, "true"),
             False => write!(f, "false"),
             If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
+            Let(ref x, ref t0, ref t1) => write!(f, "let {} = {} in {}", x, t0, t1),
         }
     }
 }
@@ -371,7 +389,22 @@ mod parser {
         })
     }));
 
-    named!(term <&[u8], Result>, alt!(term_if | term_bools | term_var | term_app | term_abs));
+    named!(term_let <&[u8], Result>,
+        do_parse!(
+            tag!("let") >> multispace >> x: identifier >> multispace >>
+            char!('=') >> multispace >> t0: term >> multispace >>
+            tag!("in") >> multispace >> t1: term >>
+            ({
+                let s = tos(x);
+                Box::new(move |ctx: Context| -> Term {
+                    let (c2, _) = ctx.add_binding(&s);
+                    Let(s.clone(), Box::new(t0(c2.clone())), Box::new(t1(c2.clone())))
+                })
+            })
+        )
+    );
+
+    named!(term <&[u8], Result>, alt!(term_if | term_bools | term_let | term_var | term_app | term_abs));
 
     pub fn parse(s: &[u8]) -> Option<Term> {
         match term(s) {
@@ -384,6 +417,13 @@ mod parser {
 pub fn run(s: &str) -> Result<String, RunError> {
     parser::parse(s.as_bytes())
         .map(|t| t.eval(&Context::new()))
+        .map(|t| t.to_string())
+        .ok_or(RunError::ParseError)
+}
+
+pub fn repl(s: &str, ctx: &Context) -> Result<String, RunError> {
+    parser::parse(s.as_bytes())
+        .map(|t| t.eval(ctx))
         .map(|t| t.to_string())
         .ok_or(RunError::ParseError)
 }

@@ -12,6 +12,8 @@ true
 ## fulluntyped
 ```
 $ rustup run nightly cargo run --bin fulluntyped
-> (lambda a. (lambda a. (a a)))
-(lambda a. (lambda a'. (a' a')))
+> let x = true in (if x then (lambda x. (lambda x. (x x))) else (lambda y. y))
+(lambda x. (lambda x'. (x' x')))
+> let x = false in (if x then (lambda x. (lambda x. (x x))) else (lambda y. y))
+(lambda y. y)
 ```

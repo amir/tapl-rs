@@ -7,12 +7,13 @@ use tapl::tapl::fulluntyped;
 
 fn main() {
     let mut input = String::new();
+    let context = fulluntyped::Context::new();
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).expect("read_line error");
         input.trim();
-        match fulluntyped::run(&input) {
+        match fulluntyped::repl(&input, &context) {
             Ok(s) => println!("{}", s),
             _ => println!("Error"),
         }
