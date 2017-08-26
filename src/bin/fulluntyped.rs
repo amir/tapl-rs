@@ -15,7 +15,7 @@ fn main() {
         input.trim();
         match fulluntyped::repl(&input, &context) {
             Ok(s) => println!("{}", s),
-            _ => println!("Error"),
+            Err(e) => println!("{:?}", e),
         }
         input.clear();
     }

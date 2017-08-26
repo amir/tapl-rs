@@ -4,11 +4,11 @@ use std::fmt;
 pub enum Term {
     True,
     False,
-    If(Box<Term>, Box<Term>, Box<Term>),
     Var(u32, u32),
     Abs(String, Box<Term>),
     App(Box<Term>, Box<Term>),
     Let(String, Box<Term>, Box<Term>),
+    If(Box<Term>, Box<Term>, Box<Term>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,17 +27,15 @@ pub struct Context {
     contexts: Vec<NameBinding>,
 }
 
-#[derive(Debug)]
-enum ContextError {
+#[derive(Debug, PartialEq)]
+pub enum ContextError {
     UnboundIdentifier(String),
     VariableLookupFailure(u32, usize),
 }
 
 impl Context {
     pub fn new() -> Self {
-        Context {
-            contexts: Vec::new(),
-        }
+        Context { contexts: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -52,11 +50,7 @@ impl Context {
         fn walk(slc: &[NameBinding], name: String) -> bool {
             match *slc {
                 [] => false,
-                [ref h, ref t..] => if h.name == name {
-                    true
-                } else {
-                    walk(t, name)
-                },
+                [ref h, ref t..] => if h.name == name { true } else { walk(t, name) },
             }
         }
         walk(self.contexts.as_slice(), name.to_owned())
@@ -104,11 +98,13 @@ impl Context {
         fn walk(slc: &[NameBinding], name: String, i: u32) -> Result<u32, ContextError> {
             match *slc {
                 [] => Err(ContextError::UnboundIdentifier(name)),
-                [ref h, ref t..] => if h.name == name {
-                    Ok(i)
-                } else {
-                    walk(t, name, i + 1)
-                },
+                [ref h, ref t..] => {
+                    if h.name == name {
+                        Ok(i)
+                    } else {
+                        walk(t, name, i + 1)
+                    }
+                }
             }
         }
 
@@ -122,8 +118,10 @@ enum EvalError {
     NoRuleApplies(Term),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum RunError {
-    ParseError,
+    ParseError(String),
+    ContextError(ContextError),
 }
 
 fn term_subst_top(s: &Term, t: &Term) -> Term {
@@ -134,25 +132,31 @@ impl Term {
     fn term_shift(&self, d: i32) -> Term {
         fn walk(d: i32, c: i32, t: &Term) -> Term {
             match *t {
-                Var(x, n) => if x as i32 >= c {
-                    Var((x as i32 + d) as u32, (n as i32 + d) as u32)
-                } else {
-                    Var(x, (n as i32 + d) as u32)
-                },
+                Var(x, n) => {
+                    if x as i32 >= c {
+                        Var((x as i32 + d) as u32, (n as i32 + d) as u32)
+                    } else {
+                        Var(x, (n as i32 + d) as u32)
+                    }
+                }
                 Abs(ref x, ref t2) => Abs(x.clone(), Box::new(walk(d, c + 1, t2))),
                 App(ref t1, ref t2) => App(Box::new(walk(d, c, t1)), Box::new(walk(d, c, t2))),
                 True => True,
                 False => False,
-                If(ref t1, ref t2, ref t3) => If(
-                    Box::new(walk(d, c, t1)),
-                    Box::new(walk(d, c, t2)),
-                    Box::new(walk(d, c, t3)),
-                ),
-                Let(ref x, ref t1, ref t2) => Let(
-                    x.clone(),
-                    Box::new(walk(d, c, t1)),
-                    Box::new(walk(d, c + 1, t2)),
-                ),
+                If(ref t1, ref t2, ref t3) => {
+                    If(
+                        Box::new(walk(d, c, t1)),
+                        Box::new(walk(d, c, t2)),
+                        Box::new(walk(d, c, t3)),
+                    )
+                }
+                Let(ref x, ref t1, ref t2) => {
+                    Let(
+                        x.clone(),
+                        Box::new(walk(d, c, t1)),
+                        Box::new(walk(d, c + 1, t2)),
+                    )
+                }
             }
         }
         walk(d, 0, self)
@@ -161,27 +165,33 @@ impl Term {
     fn term_subst(&self, j: i32, s: &Term) -> Term {
         fn walk(j: i32, s: &Term, c: i32, t: &Term) -> Term {
             match *t {
-                Var(x, n) => if x as i32 == j + c {
-                    s.term_shift(c)
-                } else {
-                    Var(x, n)
-                },
+                Var(x, n) => {
+                    if x as i32 == j + c {
+                        s.term_shift(c)
+                    } else {
+                        Var(x, n)
+                    }
+                }
                 Abs(ref x, ref t1) => Abs(x.clone(), Box::new(walk(j, s, c + 1, t1))),
                 App(ref t1, ref t2) => {
                     App(Box::new(walk(j, s, c, t1)), Box::new(walk(j, s, c, t2)))
                 }
                 True => True,
                 False => False,
-                If(ref t1, ref t2, ref t3) => If(
-                    Box::new(walk(j, s, c, t1)),
-                    Box::new(walk(j, s, c, t2)),
-                    Box::new(walk(j, s, c, t3)),
-                ),
-                Let(ref x, ref t1, ref t2) => Let(
-                    x.clone(),
-                    Box::new(walk(j, s, c, t1)),
-                    Box::new(walk(j, s, c + 1, t2)),
-                ),
+                If(ref t1, ref t2, ref t3) => {
+                    If(
+                        Box::new(walk(j, s, c, t1)),
+                        Box::new(walk(j, s, c, t2)),
+                        Box::new(walk(j, s, c, t3)),
+                    )
+                }
+                Let(ref x, ref t1, ref t2) => {
+                    Let(
+                        x.clone(),
+                        Box::new(walk(j, s, c, t1)),
+                        Box::new(walk(j, s, c + 1, t2)),
+                    )
+                }
             }
         }
         walk(j, s, 0, self)
@@ -244,10 +254,12 @@ struct ContextTerm<'a> {
 impl<'a> fmt::Display for ContextTerm<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self.term {
-            Var(x, _) => match self.context.index_to_name(x) {
-                Ok(n2) => write!(f, "{}", n2),
-                Err(e) => write!(f, "{:?}", e),
-            },
+            Var(x, _) => {
+                match self.context.index_to_name(x) {
+                    Ok(n2) => write!(f, "{}", n2),
+                    Err(e) => write!(f, "{:?}", e),
+                }
+            }
             Abs(ref x, ref t1) => {
                 let (ctx1, x1) = self.context.pick_fresh_name(x);
                 write!(
@@ -260,18 +272,20 @@ impl<'a> fmt::Display for ContextTerm<'a> {
                     }
                 )
             }
-            App(ref t1, ref t2) => write!(
-                f,
-                "({} {})",
-                ContextTerm {
-                    context: self.context,
-                    term: t1,
-                },
-                ContextTerm {
-                    context: self.context,
-                    term: t2,
-                }
-            ),
+            App(ref t1, ref t2) => {
+                write!(
+                    f,
+                    "({} {})",
+                    ContextTerm {
+                        context: self.context,
+                        term: t1,
+                    },
+                    ContextTerm {
+                        context: self.context,
+                        term: t2,
+                    }
+                )
+            }
             True => write!(f, "true"),
             False => write!(f, "false"),
             If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
@@ -291,8 +305,9 @@ mod parser {
     use super::Term;
     use super::Term::*;
     use super::Context;
+    use super::RunError;
 
-    type Result = Box<Fn(Context) -> Term>;
+    type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
 
     fn tos(s: &[u8]) -> String {
         str::from_utf8(s).unwrap().to_owned()
@@ -316,22 +331,19 @@ mod parser {
 
     named!(identifier, take_while1!(is_identifier));
 
-    named!(term_var <&[u8], Result>,
+    named!(term_var <&[u8], ContextTermResult>,
         map!(identifier, |x| {
             let s = tos(x);
-            Box::new(move |ctx: Context| -> Term {
+            Box::new(move |ctx: Context| -> Result<Term, RunError> {
                 match ctx.name_to_index(&s) {
-                    Ok(n1) => Var(n1, ctx.contexts.len() as u32),
-                    Err(e) => {
-                        println!("{:?}", e);
-                        panic!(e)
-                    }
+                    Ok(n1) => Ok(Var(n1, ctx.contexts.len() as u32)),
+                    Err(e) => Err(RunError::ContextError(e)),
                 }
             })
         })
     );
 
-    named!(term_app <&[u8], Result>,
+    named!(term_app <&[u8], ContextTermResult>,
         do_parse!(
             char!('(')       >>
             opt!(multispace) >>
@@ -340,13 +352,17 @@ mod parser {
             t2: term         >>
             opt!(multispace) >>
             char!(')')       >>
-            (Box::new(move |ctx: Context| -> Term {
-                 App(Box::new(t1(ctx.clone())), Box::new(t2(ctx.clone())))
+            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                let r: Result<(Term, Term), RunError> = t1(ctx.clone()).and_then(|f: Term| {
+                    t2(ctx.clone()).map(|g: Term| (f,g))
+                });
+
+                r.map(|(f,g)| App(Box::new(f), Box::new(g)))
             }))
         )
     );
 
-    named!(term_abs <&[u8], Result>,
+    named!(term_abs <&[u8], ContextTermResult>,
         do_parse!(
             char!('(')       >>
             opt!(multispace) >>
@@ -361,27 +377,29 @@ mod parser {
             char!(')')       >>
             ({
                 let s = tos(x);
-                Box::new(move |ctx: Context| -> Term {
+                Box::new(move |ctx: Context| -> Result<Term, RunError> {
                     let (c2, x2) = ctx.add_binding(&s);
-                    Abs(s.clone(), Box::new(t1(c2)))
+                    t1(c2).and_then(|t: Term| Ok(Abs(s.clone(), Box::new(t))))
                 })
             })
         )
     );
 
-    named!(term_if <&[u8], Result>,
+    named!(term_if <&[u8], ContextTermResult>,
         do_parse!(
             opt!(complete!(char!('('))) >>
             tag!("if")   >> multispace >> t0: term >> multispace >>
             tag!("then") >> multispace >> t1: term >> multispace >>
             tag!("else") >> multispace >> t2: term >>
             opt!(complete!(char!(')'))) >>
-            (Box::new(move |ctx: Context| -> Term {
-                If(
-                    Box::new(t0(ctx.clone())),
-                    Box::new(t1(ctx.clone())),
-                    Box::new(t2(ctx.clone()))
-                )
+            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                let r: Result<(Term, Term, Term), RunError> = t0(ctx.clone()).and_then(|f: Term| {
+                    t1(ctx.clone()).and_then(|g: Term| {
+                        t2(ctx.clone()).map(|h: Term| (f,g,h))
+                    })
+                });
+
+                r.map(|(f,g,h)| If(Box::new(f), Box::new(g), Box::new(h)))
             }))
         )
     );
@@ -392,35 +410,41 @@ mod parser {
         )
     );
 
-    named!(term_bools <&[u8], Result>, map!(term_bools1, |x| {
-        Box::new(move |ctx: Context| -> Term {
-            x.clone()
+    named!(term_bools <&[u8], ContextTermResult>, map!(term_bools1, |x| {
+        Box::new(move |ctx: Context| -> Result<Term, RunError> {
+            Ok(x.clone())
         })
     }));
 
-    named!(term_let <&[u8], Result>,
+    named!(term_let <&[u8], ContextTermResult>,
         do_parse!(
             tag!("let") >> multispace >> x: identifier >> multispace >>
             char!('=') >> multispace >> t0: term >> multispace >>
             tag!("in") >> multispace >> t1: term >>
             ({
                 let s = tos(x);
-                Box::new(move |ctx: Context| -> Term {
+                Box::new(move |ctx: Context| -> Result<Term, RunError> {
                     let (c2, _) = ctx.add_binding(&s);
-                    Let(s.clone(), Box::new(t0(c2.clone())), Box::new(t1(c2.clone())))
+
+                    let r: Result<(Term, Term), RunError> = t0(c2.clone()).and_then(|f: Term| {
+                        t1(c2.clone()).map(|g: Term| (f,g))
+                    });
+
+                    r.map(|(f,g)| Let(s.clone(), Box::new(f), Box::new(g)))
                 })
             })
         )
     );
 
-    named!(term <&[u8], Result>, alt!(
+    named!(term <&[u8], ContextTermResult>, alt!(
         term_if | term_bools | term_let | term_var | term_app | term_abs
     ));
 
-    pub fn parse(s: &[u8]) -> Option<Term> {
+    pub fn parse(s: &[u8]) -> Result<Term, RunError> {
         match term(s) {
-            IResult::Done(_, res) => Some((*res)(Context::new())),
-            _ => None,
+            IResult::Done(_, res) => (*res)(Context::new()),
+            IResult::Error(e) => Err(RunError::ParseError(e.description().to_string())),
+            IResult::Incomplete(e) => Err(RunError::ParseError(format!("Incomplete {:?}", e))),
         }
     }
 }
@@ -429,14 +453,12 @@ pub fn run(s: &str) -> Result<String, RunError> {
     parser::parse(s.as_bytes())
         .map(|t| t.eval(&Context::new()))
         .map(|t| t.to_string())
-        .ok_or(RunError::ParseError)
 }
 
 pub fn repl(s: &str, ctx: &Context) -> Result<String, RunError> {
-    parser::parse(s.as_bytes())
-        .map(|t| t.eval(ctx))
-        .map(|t| t.to_string())
-        .ok_or(RunError::ParseError)
+    parser::parse(s.as_bytes()).map(|t| t.eval(ctx)).map(|t| {
+        t.to_string()
+    })
 }
 
 #[cfg(test)]
@@ -528,12 +550,12 @@ mod tests {
 
         assert_eq!(
             parse(b"(lambda a. (lambda a'. (a a')))"),
-            Some(Abs(
+            Ok(Abs(
                 "a".to_string(),
                 Box::new(Abs(
                     "a'".to_string(),
-                    Box::new(App(Box::new(Var(1, 2)), Box::new(Var(0, 2))))
-                ))
+                    Box::new(App(Box::new(Var(1, 2)), Box::new(Var(0, 2)))),
+                )),
             ))
         );
     }
