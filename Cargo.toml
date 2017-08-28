@@ -11,5 +11,9 @@ name = "arith"
 path = "src/bin/arith.rs"
 
 [[bin]]
+name = "tyarith"
+path = "src/bin/tyarith.rs"
+
+[[bin]]
 name = "fulluntyped"
 path = "src/bin/fulluntyped.rs"

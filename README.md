@@ -17,3 +17,15 @@ $ rustup run nightly cargo run --bin fulluntyped
 > let x = false in (if x then (lambda x. (lambda x. (x x))) else (lambda y. y))
 (lambda y. y)
 ```
+
+## tyarith
+```
+> if true then zero else false
+TypeError("arms of conditional have different types")
+> (succ false)
+TypeError("argument of succ is not a number")
+> if true then zero else (succ zero)
+0: Nat
+> if true then true else false
+true: Bool
+```
