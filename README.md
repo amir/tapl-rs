@@ -28,4 +28,6 @@ TypeError("argument of succ is not a number")
 0: Nat
 > if true then true else false
 true: Bool
+> if (succ zero) then true else false
+TypeError("guard of conditional not a boolean")
 ```
