@@ -31,3 +31,13 @@ true: Bool
 > if (succ zero) then true else false
 TypeError("guard of conditional not a boolean")
 ```
+
+## simplebool
+```
+> (lambda x:Bool. x)
+(lambda x:Bool. x) : Bool->Bool
+> (lambda x:Bool->Bool. x)
+(lambda x:Bool->Bool. x) : Bool->Bool->Bool->Bool
+> ((lambda x:Bool->Bool. x) (lambda y:Bool. y))
+(lambda y:Bool. y) : Bool->Bool
+```
