@@ -213,7 +213,6 @@ mod tests {
     use super::run;
     use super::Term::*;
     use super::Type::*;
-    use super::RunError;
     use super::is_numeric_val;
     use super::type_of;
     use super::parser::parse;
