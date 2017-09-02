@@ -146,7 +146,6 @@ impl Context {
 
     fn pick_fresh_name(&self, binding: &Binding) -> (Context, Binding) {
         if self.is_name_bound(binding) {
-            print!("fucking here!!!!!!!!!!!!!");
             let mut nb = (*binding).clone();
             nb.label = nb.label + "'";
             self.pick_fresh_name(&nb)
@@ -523,21 +522,4 @@ pub fn repl(s: &str, ctx: &Context) -> Result<String, RunError> {
             }
         },
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Term::*;
-    use super::parser::parse;
-
-    #[test]
-    fn parse_test() {
-        print!(
-            "{:?}\n",
-            parse(
-                b"if true then (lambda x:Bool. (lambda y:Bool. (x y))) else true",
-            )
-        );
-        assert_eq!(parse(b"true"), Ok(False));
-    }
 }
