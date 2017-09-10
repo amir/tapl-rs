@@ -104,6 +104,123 @@ fn eval1(term: &Term) -> Result<Term, EvalError> {
     }
 }
 
+fn term_map(
+    onvar: &Fn(usize, usize) -> Term,
+    ontype: &Fn(&Type) -> Type,
+    c: usize,
+    t: &Term,
+) -> Term {
+    use self::Term::*;
+
+    fn walk(
+        onvar: &Fn(usize, usize) -> Term,
+        ontype: &Fn(&Type) -> Type,
+        c: usize,
+        term: &Term,
+    ) -> Term {
+        match *term {
+            Inert(ref ty_t) => Inert(ontype(ty_t)),
+            Var(x, n) => onvar(x, n),
+            True | False | Str(_) | Unit | Float(_) | Zero => term.clone(),
+            Abs(ref x, ref ty_t1, ref t2) => {
+                Abs(
+                    x.clone(),
+                    ontype(ty_t1),
+                    Box::new(walk(onvar, ontype, c + 1, t2)),
+                )
+            }
+            App(ref t1, ref t2) => {
+                App(
+                    Box::new(walk(onvar, ontype, c, t1)),
+                    Box::new(walk(onvar, ontype, c, t2)),
+                )
+            }
+            Let(ref x, ref t1, ref t2) => {
+                Let(
+                    x.clone(),
+                    Box::new(walk(onvar, ontype, c, t1)),
+                    Box::new(walk(onvar, ontype, c + 1, t2)),
+                )
+            }
+            Fix(ref t1) => Fix(Box::new(walk(onvar, ontype, c, t1))),
+            If(ref t1, ref t2, ref t3) => {
+                If(
+                    Box::new(walk(onvar, ontype, c, t1)),
+                    Box::new(walk(onvar, ontype, c, t2)),
+                    Box::new(walk(onvar, ontype, c, t3)),
+                )
+            }
+            Projection(ref t1, ref l) => {
+                Projection(Box::new(walk(onvar, ontype, c, t1)), l.clone())
+            }
+            Record(ref fields) => Record(
+                fields
+                    .iter()
+                    .map(|&(ref li, ref ti)| {
+                        (li.clone(), Box::new(walk(onvar, ontype, c, ti)))
+                    })
+                    .collect::<Vec<(String, Box<Term>)>>(),
+            ),
+            Ascribe(ref t1, ref ty_t1) => {
+                Ascribe(Box::new(walk(onvar, ontype, c, t1)), ontype(ty_t1))
+            }
+            TimesFloat(ref t1, ref t2) => {
+                TimesFloat(
+                    Box::new(walk(onvar, ontype, c, t1)),
+                    Box::new(walk(onvar, ontype, c, t2)),
+                )
+            }
+            Succ(ref t1) => Succ(Box::new(walk(onvar, ontype, c, t1))),
+            Pred(ref t1) => Pred(Box::new(walk(onvar, ontype, c, t1))),
+            IsZero(ref t1) => IsZero(Box::new(walk(onvar, ontype, c, t1))),
+            Tag(ref l, ref t1, ref ty_t) => {
+                Tag(
+                    l.clone(),
+                    Box::new(walk(onvar, ontype, c, t1)),
+                    ontype(ty_t),
+                )
+            }
+            Case(ref t, ref cases) => {
+                Case(
+                    Box::new(walk(onvar, ontype, c, t)),
+                    cases
+                        .iter()
+                        .map(|&(ref li, (ref xi, ref ti))| {
+                            (li.clone(), (
+                                xi.clone(),
+                                Box::new(walk(onvar, ontype, c + 1, ti)),
+                            ))
+                        })
+                        .collect::<Vec<(String, (String, Box<Term>))>>(),
+                )
+            }
+            _ => term.clone(),
+        }
+    }
+    walk(onvar, ontype, 0, t)
+}
+
+fn term_shift_above(d: i32, c: usize, t: &Term) -> Term {
+    use self::Term::*;
+
+    fn _onvar(d: i32, c: usize, x: usize, n: usize) -> Term {
+        if x >= c {
+            Var(((x as i32) + d) as usize, ((n as i32) + d) as usize)
+        } else {
+            Var(x, ((n as i32) + d) as usize)
+        }
+    }
+
+    let onvar = |x, n| _onvar(d, c, x, n);
+    let ontype = |t| type_shift_above(d, c, t);
+
+    term_map(&onvar, &ontype, c, t)
+}
+
+fn term_shift(d: i32, t: &Term) -> Term {
+    term_shift_above(d, 0, t)
+}
+
 fn type_map(onvar: &Fn(usize, usize) -> Type, ty_t: &Type) -> Type {
     use self::Type::*;
 
