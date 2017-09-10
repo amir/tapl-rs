@@ -314,6 +314,28 @@ fn binding_shift(d: i32, bind: &BindingType) -> BindingType {
     }
 }
 
+fn term_subst(j: usize, s: &Term, t: &Term) -> Term {
+    use self::Term::Var;
+
+    fn _onvar(j: usize, s: &Term, x: usize, n: usize) -> Term {
+        if x == j {
+            term_shift(j as i32, s)
+        } else {
+            Var(x, n)
+        }
+    }
+    let onvar = |x, n| _onvar(j, s, x, n);
+    fn ontype(t: &Type) -> Type {
+        t.clone()
+    }
+
+    term_map(&onvar, &ontype, j, t)
+}
+
+fn term_subst_top(s: &Term, t: &Term) -> Term {
+    term_shift(-1, &term_subst(0, &term_shift(1, s), t))
+}
+
 #[cfg(test)]
 mod tests {
     use super::Term::*;
