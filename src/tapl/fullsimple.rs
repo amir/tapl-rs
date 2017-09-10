@@ -296,6 +296,24 @@ fn type_subst_top(ty_s: &Type, ty_t: &Type) -> Type {
     type_shift(-1, &type_subst(&type_shift(1, ty_s), 0, ty_t))
 }
 
+fn binding_shift(d: i32, bind: &BindingType) -> BindingType {
+    use self::BindingType::*;
+
+    match *bind {
+        NameBind => NameBind,
+        TypeVarBind => TypeVarBind,
+        TermAbbBind(ref t, ref opt_ty_t) => {
+            let ts_opt = match *opt_ty_t {
+                None => None,
+                Some(ref ty_t) => Some(type_shift(d, ty_t)),
+            };
+            TermAbbBind(term_shift(d, t), ts_opt)
+        }
+        VarBind(ref ty_t) => VarBind(type_shift(d, ty_t)),
+        TypeAbbBind(ref ty_t) => TypeAbbBind(type_shift(d, ty_t)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Term::*;
