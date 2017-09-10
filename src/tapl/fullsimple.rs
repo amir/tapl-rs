@@ -336,6 +336,26 @@ fn term_subst_top(s: &Term, t: &Term) -> Term {
     term_shift(-1, &term_subst(0, &term_shift(1, s), t))
 }
 
+fn type_term_subst(ty_s: &Type, j: usize, t: &Term) -> Term {
+    use self::Term::Var;
+
+    fn onvar(x: usize, n: usize) -> Term {
+        Var(x, n)
+    }
+
+    fn _ontype(ty_s: &Type, j: i32, ty_t: &Type) -> Type {
+        type_subst(ty_s, j, ty_t)
+    }
+
+    let ontype = |t| _ontype(ty_s, j as i32, t);
+
+    term_map(&onvar, &ontype, j, t)
+}
+
+fn type_term_subst_top(ty_s: &Type, t: &Term) -> Term {
+    term_shift(-1, &type_term_subst(&type_shift(1, ty_s), 0, t))
+}
+
 #[cfg(test)]
 mod tests {
     use super::Term::*;
