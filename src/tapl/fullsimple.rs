@@ -212,9 +212,8 @@ fn term_shift_above(d: i32, c: usize, t: &Term) -> Term {
     }
 
     let onvar = |x, n| _onvar(d, c, x, n);
-    let ontype = |t| type_shift_above(d, c, t);
 
-    term_map(&onvar, &ontype, c, t)
+    term_map(&onvar, &|t| type_shift_above(d, c, t), c, t)
 }
 
 fn term_shift(d: i32, t: &Term) -> Term {
@@ -347,9 +346,9 @@ fn type_term_subst(ty_s: &Type, j: usize, t: &Term) -> Term {
         type_subst(ty_s, j, ty_t)
     }
 
-    let ontype = |t| _ontype(ty_s, j as i32, t);
+    //let ontype = |t| _ontype(ty_s, j as i32, t);
 
-    term_map(&onvar, &ontype, j, t)
+    term_map(&onvar, &|t| _ontype(ty_s, j as i32, t), j, t)
 }
 
 fn type_term_subst_top(ty_s: &Type, t: &Term) -> Term {
