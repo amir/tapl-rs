@@ -38,6 +38,7 @@ pub enum Term {
     Inert(Type),
 }
 
+#[derive(Clone, PartialEq)]
 pub enum BindingType {
     NameBind,
     TypeVarBind,
@@ -51,20 +52,12 @@ pub enum Command {
     Bind(String, BindingType),
 }
 
+#[derive(Clone, PartialEq)]
 pub struct Binding {
     label: String,
     binding: BindingType,
 }
 
-pub struct Context {
-    bindings: Vec<Binding>,
-}
-
-impl Context {
-    pub fn new() -> Self {
-        Context { bindings: Vec::new() }
-    }
-}
 
 pub enum EvalError {
     NoRuleApplies(Term),
@@ -346,8 +339,6 @@ fn type_term_subst(ty_s: &Type, j: usize, t: &Term) -> Term {
         type_subst(ty_s, j, ty_t)
     }
 
-    //let ontype = |t| _ontype(ty_s, j as i32, t);
-
     term_map(&onvar, &|t| _ontype(ty_s, j as i32, t), j, t)
 }
 
@@ -355,12 +346,110 @@ fn type_term_subst_top(ty_s: &Type, t: &Term) -> Term {
     term_shift(-1, &type_term_subst(&type_shift(1, ty_s), 0, t))
 }
 
+type Context = Vec<Binding>;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContextError {
+    ArrowExpected,
+    ParameterTypeMismatch,
+    VariableLookupFailure(usize, usize),
+    WrongBindingForVariable,
+    ConditionalWithGuardOfNotBoolean,
+    ConditionalWithArmsOfDifferentTypes,
+    UnboundIdentifier(String),
+}
+
+fn is_name_bound(ctx: Context, binding: &Binding) -> bool {
+    ctx.iter().position(|b| b == binding).is_some()
+}
+
+fn add_binding(ctx: Context, binding: &Binding) -> Context {
+    let mut newc = ctx.clone();
+    newc.insert(0, binding.clone());
+
+    newc
+}
+
+fn add_name(ctx: Context, name: String) -> Context {
+    add_binding(
+        ctx,
+        &Binding {
+            label: name,
+            binding: BindingType::NameBind,
+        },
+    )
+}
+
+fn pick_fresh_name(ctx: Context, binding: &Binding) -> (Context, Binding) {
+    if is_name_bound(ctx.clone(), binding) {
+        let mut nb = (*binding).clone();
+        nb.label = nb.label + "'";
+        pick_fresh_name(ctx.clone(), &nb)
+    } else {
+        let newc = add_binding(ctx.clone(), binding);
+        (newc, (*binding).clone())
+    }
+}
+
+fn index_to_name(ctx: Context, idx: usize) -> Result<Binding, ContextError> {
+    if idx >= ctx.len() {
+        Err(ContextError::VariableLookupFailure(idx, ctx.len()))
+    } else {
+        let a = &ctx[idx];
+        Ok(a.clone())
+    }
+}
+
+fn name_to_index(ctx: Context, name: &str) -> Result<usize, ContextError> {
+    match ctx.iter().position(|b| b.label == name) {
+        Some(s) => Ok(s),
+        None => Err(ContextError::UnboundIdentifier(name.to_string())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::Binding;
+    use super::Context;
     use super::Term::*;
+    use super::BindingType::*;
 
     #[test]
     fn isval_test() {
         assert!(super::isval(&True));
+    }
+
+    #[test]
+    fn is_name_bound_test() {
+        let ctx = Context::new();
+        let b = &Binding {
+            label: "test".to_string(),
+            binding: NameBind,
+        };
+        let ctx = super::add_name(ctx, "test".to_string());
+        assert!(super::is_name_bound(ctx, b))
+    }
+
+    #[test]
+    fn pick_fresh_name_test() {
+        let ctx = Context::new();
+        let ctx = super::add_name(ctx, "a".to_string());
+        let b = &Binding {
+            label: "a".to_string(),
+            binding: NameBind,
+        };
+        let (newc, newb) = super::pick_fresh_name(ctx, b);
+        assert_eq!(newb.label, "a'".to_string());
+    }
+
+
+    #[test]
+    fn index_to_name_to_index_test() {
+        let ctx = Context::new();
+        let ctx = super::add_name(ctx, "a".to_string());
+        let ctx = super::add_name(ctx, "b".to_string());
+
+        assert_eq!(1, super::name_to_index(ctx.clone(), "a").unwrap());
+        assert_eq!("b".to_string(), super::index_to_name(ctx, 0).unwrap().label);
     }
 }
