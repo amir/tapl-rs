@@ -93,7 +93,41 @@ fn eval1(term: &Term) -> Result<Term, EvalError> {
         If(box False, _, ref t3) => Ok(*t3.clone()),
         If(ref t1, ref t2, ref t3) => Ok(If(Box::new(eval1(t1)?), t2.clone(), t3.clone())),
         Tag(ref l, ref t1, ref ty_t) => Ok(Tag(l.clone(), Box::new(eval1(t1)?), ty_t.clone())),
+        Case(box Tag(ref li, ref v11, _), ref branches) if isval(v11) => {
+            match branches.iter().find(|&x| li.clone() == (x.1).0) {
+                Some(&(ref x, (_, ref body))) => Ok(term_subst_top(v11, body)),
+                None => Err(EvalError::NoRuleApplies(*v11.clone())),
+            }
+        }
+        Case(ref t1, ref branches) => {
+            eval1(t1).and_then(|t| Ok(Case(Box::new(t), branches.clone())))
+        }
+        App(box Abs(ref x, ref ty_t11, ref t12), ref v2) if isval(v2) => Ok(
+            term_subst_top(v2, t12),
+        ),
+        App(ref v1, ref t2) if isval(v1) => {
+            eval1(t2).and_then(|t| Ok(App(Box::new(*v1.clone()), Box::new(t))))
+        }
+        App(ref t1, ref t2) => eval1(t1).and_then(|t| Ok(App(Box::new(t), Box::new(*t2.clone())))),
+        Let(_, ref v1, ref t2) if isval(v1) => Ok(term_subst_top(v1, t2)),
+        Let(ref x, ref t1, ref t2) => {
+            eval1(t1).and_then(|t| Ok(Let(x.clone(), Box::new(t), Box::new(*t2.clone()))))
+        }
+        Fix(ref v1) if isval(v1) => {
+            match *v1 {
+                box Abs(_, _, ref t12) => Ok(term_subst_top(term, t12)),
+                _ => Err(EvalError::NoRuleApplies(*v1.clone())),
+            }
+        }
+        Fix(ref t1) => eval1(t1).and_then(|t| Ok(Fix(Box::new(t)))),
         _ => Err(EvalError::NoRuleApplies(term.clone())),
+    }
+}
+
+fn eval(ctx: Context, t: &Term) -> Term {
+    match eval1(t) {
+        Ok(t) => eval(ctx.clone(), &t),
+        Err(EvalError::NoRuleApplies(_)) => t.clone(),
     }
 }
 
@@ -357,6 +391,7 @@ pub enum ContextError {
     ConditionalWithGuardOfNotBoolean,
     ConditionalWithArmsOfDifferentTypes,
     UnboundIdentifier(String),
+    NoRecordedType(usize),
 }
 
 fn is_name_bound(ctx: Context, binding: &Binding) -> bool {
@@ -405,6 +440,21 @@ fn name_to_index(ctx: Context, name: &str) -> Result<usize, ContextError> {
         Some(s) => Ok(s),
         None => Err(ContextError::UnboundIdentifier(name.to_string())),
     }
+}
+
+fn get_binding(ctx: Context, idx: usize) -> Result<BindingType, ContextError> {
+    index_to_name(ctx.clone(), idx).and_then(|b: Binding| {
+        Ok(binding_shift((idx + 1) as i32, &b.binding))
+    })
+}
+
+fn get_type_from_context(ctx: Context, idx: usize) -> Result<Type, ContextError> {
+    get_binding(ctx.clone(), idx).and_then(|bt: BindingType| match bt {
+        BindingType::VarBind(t) => Ok(t),
+        BindingType::TermAbbBind(_, Some(t)) => Ok(t),
+        BindingType::TermAbbBind(_, None) => Err(ContextError::NoRecordedType(idx)),
+        _ => Err(ContextError::WrongBindingForVariable),
+    })
 }
 
 #[cfg(test)]
