@@ -147,6 +147,34 @@ fn eval1(ctx: Context, term: &Term) -> Result<Term, EvalError> {
         Ascribe(ref t1, ref ty_t) => {
             eval1(ctx.clone(), t1).and_then(|t| Ok(Ascribe(Box::new(t), ty_t.clone())))
         }
+        Projection(ref v1 @ box Record(_), ref l) if isval(v1) => {
+            match *v1.clone() {
+                Record(fields) => {
+                    match fields.iter().find(|&x| l.clone() == x.0) {
+                        Some(&(_, ref body)) => Ok(*body.clone()),
+                        None => Err(EvalError::NoRuleApplies(*v1.clone())),
+                    }
+                }
+                _ => Err(EvalError::NoRuleApplies(*v1.clone())),
+            }
+        }
+        Projection(ref t1, ref l) => {
+            eval1(ctx.clone(), t1).and_then(|t| Ok(Projection(Box::new(t), l.clone())))
+        }
+        TimesFloat(box Float(ref f1), box Float(ref f2)) => Ok(Float(f1 * f2)),
+        TimesFloat(ref t1 @ box Float(_), ref t2) => {
+            eval1(ctx.clone(), t2).and_then(|t| Ok(TimesFloat(t1.clone(), Box::new(t))))
+        }
+        TimesFloat(ref t1, ref t2) => {
+            eval1(ctx.clone(), t1).and_then(|t| Ok(TimesFloat(Box::new(t), t2.clone())))
+        }
+        Succ(ref t1) => eval1(ctx.clone(), t1).and_then(|t| Ok(Succ(Box::new(t)))),
+        Pred(box Zero) => Ok(Zero),
+        Pred(box Succ(ref nv1)) if is_numeric_val(nv1) => Ok(*nv1.clone()),
+        Pred(ref t1) => eval1(ctx.clone(), t1).and_then(|t| Ok(Pred(Box::new(t)))),
+        IsZero(box Zero) => Ok(True),
+        IsZero(box Succ(ref nv1)) if is_numeric_val(nv1) => Ok(False),
+        IsZero(ref t1) => eval1(ctx.clone(), t1).and_then(|t| Ok(IsZero(Box::new(t)))),
         _ => Err(EvalError::NoRuleApplies(term.clone())),
     }
 }
@@ -248,7 +276,6 @@ fn term_map(
                         .collect::<Vec<(String, (String, Box<Term>))>>(),
                 )
             }
-            _ => term.clone(),
         }
     }
     walk(onvar, ontype, 0, t)
