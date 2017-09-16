@@ -21,3 +21,7 @@ path = "src/bin/fulluntyped.rs"
 [[bin]]
 name = "simplebool"
 path = "src/bin/simplebool.rs"
+
+[[bin]]
+name = "fullsimple"
+path = "src/bin/fullsimple.rs"
