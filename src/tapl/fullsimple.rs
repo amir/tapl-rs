@@ -103,16 +103,14 @@ fn eval1(ctx: Context, term: &Term) -> Result<Term, EvalError> {
         )),
         Case(box Tag(ref li, ref v11, _), ref branches) if isval(v11) => {
             match branches.iter().find(|&x| li.clone() == (x.1).0) {
-                Some(&(ref x, (_, ref body))) => Ok(term_subst_top(v11, body)),
+                Some(&(_, (_, ref body))) => Ok(term_subst_top(v11, body)),
                 None => Err(EvalError::NoRuleApplies(*v11.clone())),
             }
         }
         Case(ref t1, ref branches) => {
             eval1(ctx.clone(), t1).and_then(|t| Ok(Case(Box::new(t), branches.clone())))
         }
-        App(box Abs(ref x, ref ty_t11, ref t12), ref v2) if isval(v2) => Ok(
-            term_subst_top(v2, t12),
-        ),
+        App(box Abs(_, _, ref t12), ref v2) if isval(v2) => Ok(term_subst_top(v2, t12)),
         App(ref v1, ref t2) if isval(v1) => {
             eval1(ctx.clone(), t2).and_then(|t| Ok(App(Box::new(*v1.clone()), Box::new(t))))
         }
@@ -143,7 +141,7 @@ fn eval1(ctx: Context, term: &Term) -> Result<Term, EvalError> {
                 Err(_) => Err(EvalError::NoRuleApplies(term.clone())),
             }
         }
-        Ascribe(ref v1, ref ty_t) if isval(v1) => Ok(*v1.clone()),
+        Ascribe(ref v1, _) if isval(v1) => Ok(*v1.clone()),
         Ascribe(ref t1, ref ty_t) => {
             eval1(ctx.clone(), t1).and_then(|t| Ok(Ascribe(Box::new(t), ty_t.clone())))
         }
@@ -434,7 +432,7 @@ fn type_term_subst_top(ty_s: &Type, t: &Term) -> Term {
     term_shift(-1, &type_term_subst(&type_shift(1, ty_s), 0, t))
 }
 
-type Context = Vec<Binding>;
+pub type Context = Vec<Binding>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -511,6 +509,79 @@ fn get_type_from_context(ctx: Context, idx: usize) -> Result<Type, ContextError>
     })
 }
 
+#[derive(Debug, PartialEq)]
+pub enum RunError {
+    ParseError(String),
+    ContextError(ContextError),
+}
+
+mod parser {
+    extern crate nom;
+
+    use nom::anychar;
+    use nom::IResult;
+
+    use super::Term;
+    use super::Context;
+    use super::RunError;
+
+    type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
+
+    named!(term_str <&[u8], ContextTermResult>,
+        do_parse!(
+            char!('"')         >>
+            a: many0!(anychar) >>
+            char!('"')         >>
+            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                let s = a.iter().collect::<String>();
+                Ok(Term::Str(s))
+            }))
+        )
+    );
+
+    named!(term_bools1 <&[u8], Term>, alt!(
+            tag!("true")  => { |_| Term::True  } |
+            tag!("false") => { |_| Term::False }
+        )
+    );
+
+    named!(term_bools <&[u8], ContextTermResult>, map!(term_bools1, |x| {
+        Box::new(move |ctx: Context| -> Result<Term, RunError> {
+            Ok(x.clone())
+        })
+    }));
+
+    named!(term <&[u8], ContextTermResult>, alt!(
+        term_bools | term_str
+    ));
+
+    pub fn parse(s: &[u8]) -> Result<Term, RunError> {
+        match term(s) {
+            IResult::Done(_, res) => (*res)(Context::new()),
+            IResult::Error(e) => Err(RunError::ParseError(e.description().to_string())),
+            IResult::Incomplete(e) => Err(RunError::ParseError(format!("Incomplete {:?}", e))),
+        }
+    }
+}
+
+pub fn type_of(t: &Term) -> Result<Type, ContextError> {
+    use self::Term::*;
+
+    match *t {
+        True | False => Ok(Type::Bool),
+        _ => Err(ContextError::ParameterTypeMismatch),
+    }
+}
+
+pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
+    parser::parse(s.as_bytes())
+        .map(|t| eval(ctx, &t))
+        .and_then(|t| match type_of(&t) {
+            Ok(ty_t) => Ok(format!("{:?} : {:?}", t, ty_t)),
+            Err(e) => Err(RunError::ContextError(e)),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::Binding;
@@ -555,5 +626,13 @@ mod tests {
 
         assert_eq!(1, super::name_to_index(ctx.clone(), "a").unwrap());
         assert_eq!("b".to_string(), super::index_to_name(ctx, 0).unwrap().label);
+    }
+
+    #[test]
+    fn eval1_test() {
+        let ctx = Context::new();
+        let t = &TimesFloat(Box::new(Float(2.5)), Box::new(Float(2.5)));
+
+        assert_eq!(Float(6.25), super::eval(ctx, t));
     }
 }
