@@ -442,6 +442,7 @@ pub enum ContextError {
     WrongBindingForVariable,
     ConditionalWithGuardOfNotBoolean,
     ConditionalWithArmsOfDifferentTypes,
+    UnexpectedBodyType,
     UnboundIdentifier(String),
     NoRecordedType(usize),
 }
@@ -586,8 +587,35 @@ mod parser {
         )
     );
 
+    named!(term_succ <&[u8], ContextTermResult>,
+        do_parse!(
+            char!('(')   >>
+            tag!("succ") >>
+            multispace   >>
+            t0: term     >>
+            char!(')')   >>
+            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                t0(ctx.clone()).and_then(|t: Term| Ok(Term::Succ(Box::new(t))))
+            }))
+        )
+    );
+
+    named!(term_pred <&[u8], ContextTermResult>,
+        do_parse!(
+            char!('(')   >>
+            tag!("pred") >>
+            multispace   >>
+            t0: term     >>
+            char!(')')   >>
+            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                t0(ctx.clone()).and_then(|t: Term| Ok(Term::Pred(Box::new(t))))
+            }))
+        )
+    );
+
     named!(type_non_arrow <&[u8], Type>, alt!(
-        tag!("Bool") => { |_| Type::Bool }
+        tag!("Bool") => { |_| Type::Bool } |
+        tag!("Nat")  => { |_| Type::Nat  }
     ));
 
     named!(types <&[u8], Type>, alt!(
@@ -648,20 +676,22 @@ mod parser {
         )
     );
 
-    named!(term_bools1 <&[u8], Term>, alt!(
+    named!(term_zero_arith0 <&[u8], Term>, alt!(
             tag!("true")  => { |_| Term::True  } |
-            tag!("false") => { |_| Term::False }
+            tag!("false") => { |_| Term::False } |
+            tag!("unit")  => { |_| Term::Unit  } |
+            tag!("zero")  => { |_| Term::Zero  }
         )
     );
 
-    named!(term_bools <&[u8], ContextTermResult>, map!(term_bools1, |x| {
+    named!(term_zero_arith <&[u8], ContextTermResult>, map!(term_zero_arith0, |x| {
         Box::new(move |ctx: Context| -> Result<Term, RunError> {
             Ok(x.clone())
         })
     }));
 
     named!(term <&[u8], ContextTermResult>, alt!(
-        term_if | term_bools | term_var | term_app | term_abs
+        term_pred | term_succ | term_if | term_zero_arith | term_app | term_abs | term_var
     ));
 
     pub fn parse(s: &[u8]) -> Result<Term, RunError> {
@@ -782,7 +812,38 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
                 Err(ContextError::ConditionalWithGuardOfNotBoolean)
             })
         }
-        _ => Err(ContextError::ParameterTypeMismatch),
+        Succ(ref t1) => {
+            type_of(c.clone(), t1).and_then(|t: Type| if equivalent(c.clone(), t, Type::Nat) {
+                Ok(Type::Nat)
+            } else {
+                Err(ContextError::ParameterTypeMismatch)
+            })
+        }
+        Pred(ref t1) => {
+            type_of(c.clone(), t1).and_then(|t: Type| if equivalent(c.clone(), t, Type::Nat) {
+                Ok(Type::Nat)
+            } else {
+                Err(ContextError::ParameterTypeMismatch)
+            })
+        }
+        IsZero(ref t1) => {
+            type_of(c.clone(), t1).and_then(|t: Type| if equivalent(c.clone(), t, Type::Bool) {
+                Ok(Type::Nat)
+            } else {
+                Err(ContextError::ParameterTypeMismatch)
+            })
+        }
+        Ascribe(ref t1, ref ty_t) => {
+            type_of(c.clone(), t1).and_then(|t: Type| if equivalent(c.clone(), t, ty_t.clone()) {
+                Ok(ty_t.clone())
+            } else {
+                Err(ContextError::UnexpectedBodyType)
+            })
+        }
+        Float(_) => Ok(Type::Float),
+        Zero => Ok(Type::Nat),
+        Unit => Ok(Type::Unit),
+        _ => Err(ContextError::ParameterTypeMismatch), 
     }
 }
 
@@ -829,7 +890,6 @@ mod tests {
         let (newc, newb) = super::pick_fresh_name(ctx, b);
         assert_eq!(newb.label, "a'".to_string());
     }
-
 
     #[test]
     fn index_to_name_to_index_test() {
