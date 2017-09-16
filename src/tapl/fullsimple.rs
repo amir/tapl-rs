@@ -518,23 +518,132 @@ pub enum RunError {
 mod parser {
     extern crate nom;
 
-    use nom::anychar;
-    use nom::IResult;
+    use std::str;
 
     use super::Term;
+    use super::Type;
+    use super::Binding;
     use super::Context;
     use super::RunError;
+    use super::BindingType;
+    use super::{add_binding, name_to_index};
+
+    use nom::IResult;
+    use nom::multispace;
 
     type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
 
-    named!(term_str <&[u8], ContextTermResult>,
+    fn tos(s: &[u8]) -> String {
+        str::from_utf8(s).unwrap().to_owned()
+    }
+
+    fn is_alphabetic(chr: u8) -> bool {
+        (chr >= 0x41 && chr <= 0x5A) || (chr >= 0x61 && chr <= 0x7A)
+    }
+
+    fn is_digit(chr: u8) -> bool {
+        chr >= 0x30 && chr <= 0x39
+    }
+
+    fn is_prime(chr: u8) -> bool {
+        chr == 0x27
+    }
+
+    fn is_identifier(chr: u8) -> bool {
+        is_alphabetic(chr) || is_digit(chr) || is_prime(chr)
+    }
+
+    named!(identifier, take_while1!(is_identifier));
+
+    named!(term_var <&[u8], ContextTermResult>,
+        map!(identifier, |x| {
+            let s = tos(x);
+            Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                match name_to_index(ctx.clone(), &s) {
+                    Ok(n1) => Ok(Term::Var(n1, ctx.len())),
+                    Err(e) => Err(RunError::ContextError(e)),
+                }
+            })
+        })
+    );
+
+    named!(term_app <&[u8], ContextTermResult>,
         do_parse!(
-            char!('"')         >>
-            a: many0!(anychar) >>
-            char!('"')         >>
+            char!('(')       >>
+            opt!(multispace) >>
+            t1: term         >>
+            multispace       >>
+            t2: term         >>
+            opt!(multispace) >>
+            char!(')')       >>
             (Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                let s = a.iter().collect::<String>();
-                Ok(Term::Str(s))
+                let r: Result<(Term, Term), RunError> = t1(ctx.clone()).and_then(|f: Term| {
+                    t2(ctx.clone()).map(|g: Term| (f,g))
+                });
+
+                r.map(|(f,g)| Term::App(Box::new(f), Box::new(g)))
+            }))
+        )
+    );
+
+    named!(type_non_arrow <&[u8], Type>, alt!(
+        tag!("Bool") => { |_| Type::Bool }
+    ));
+
+    named!(types <&[u8], Type>, alt!(
+            do_parse!(
+                t1: type_non_arrow >>
+                tag!("->")         >>
+                t2: type_non_arrow >>
+                (Type::Arrow(Box::new(t1), Box::new(t2)))
+            )                                   |
+            type_non_arrow
+        )
+    );
+
+    named!(term_abs <&[u8], ContextTermResult>,
+        do_parse!(
+            char!('(')       >>
+            opt!(multispace) >>
+            tag!("lambda")   >>
+            multispace       >>
+            x: identifier    >>
+            char!(':')       >>
+            xt: types        >>
+            char!('.')       >>
+            multispace       >>
+            t1: term         >>
+            opt!(multispace) >>
+            char!(')')       >>
+            ({
+                let s = tos(x);
+                Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                    let b = &Binding {
+                        label: s.clone(),
+                        binding: BindingType::VarBind(xt.clone()),
+                    };
+                    let c2 = add_binding(ctx, b);
+                    t1(c2).and_then(|t: Term| Ok(Term::Abs(s.clone(), xt.clone(), Box::new(t))))
+                })
+            })
+        )
+    );
+
+    named!(term_if <&[u8], ContextTermResult>,
+        do_parse!(
+            opt!(complete!(char!('('))) >>
+            tag!("if")   >> multispace >> t0: term >> multispace >>
+            tag!("then") >> multispace >> t1: term >> multispace >>
+            tag!("else") >> multispace >> t2: term >>
+            opt!(complete!(char!(')'))) >>
+            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                let r: Result<(Term, Term, Term), RunError> = t0(ctx.clone()).and_then(|f: Term| {
+                    t1(ctx.clone()).and_then(|g: Term| {
+                        t2(ctx.clone()).map(|h: Term| (f,g,h))
+                    })
+                });
+
+                r.map(|(f,g,h)| Term::If(Box::new(f), Box::new(g), Box::new(h)))
             }))
         )
     );
@@ -552,7 +661,7 @@ mod parser {
     }));
 
     named!(term <&[u8], ContextTermResult>, alt!(
-        term_bools | term_str
+        term_if | term_bools | term_var | term_app | term_abs
     ));
 
     pub fn parse(s: &[u8]) -> Result<Term, RunError> {
@@ -564,19 +673,123 @@ mod parser {
     }
 }
 
-pub fn type_of(t: &Term) -> Result<Type, ContextError> {
+fn is_type_abb(c: Context, i: usize) -> bool {
+    match get_binding(c, i) {
+        Ok(self::BindingType::TypeAbbBind(_)) => true,
+        _ => false,
+    }
+}
+
+fn get_type_abb(c: Context, i: usize) -> Result<Type, EvalError> {
+    match get_binding(c, i) {
+        Ok(self::BindingType::TypeAbbBind(ref t)) => Ok(t.clone()),
+        _ => Err(EvalError::NoRuleApplies(Term::False)), // introduce a dummy term
+    }
+}
+
+fn compute_type(ctx: Context, ty_t: Type) -> Result<Type, EvalError> {
+    match ty_t {
+        Type::Var(ref i, _) if is_type_abb(ctx.clone(), i.clone()) => {
+            get_type_abb(ctx.clone(), i.clone())
+        }
+        _ => Err(EvalError::NoRuleApplies(Term::False)), // introduce a dummy term
+    }
+}
+
+fn simplify_type(ctx: Context, ty_t: Type) -> Type {
+    match compute_type(ctx.clone(), ty_t.clone()) {
+        Ok(t) => simplify_type(ctx.clone(), t),
+        _ => ty_t,
+    }
+}
+
+fn equivalent(ctx: Context, ty_s: Type, ty_t: Type) -> bool {
+    use self::Type::*;
+
+    let ty_s = simplify_type(ctx.clone(), ty_s);
+    let ty_t = simplify_type(ctx.clone(), ty_t);
+    match (ty_s.clone(), ty_t.clone()) {
+        (Nat, Nat) => true,
+        (Str, Str) => true,
+        (Bool, Bool) => true,
+        (Unit, Unit) => true,
+        (Float, Float) => true,
+        (Id(b1), Id(b2)) => b1 == b2,
+        (Var(i, _), _) if is_type_abb(ctx.clone(), i) => {
+            match get_type_abb(ctx.clone(), i) {
+                Ok(t) => equivalent(ctx.clone(), t, ty_t.clone()),
+                _ => false,
+            }
+        }
+        (_, Var(i, _)) if is_type_abb(ctx.clone(), i) => {
+            match get_type_abb(ctx.clone(), i) {
+                Ok(t) => equivalent(ctx.clone(), ty_s.clone(), t),
+                _ => false,
+            }
+        }
+        (Var(i, _), Var(j, _)) => i == j,
+        (Arrow(ref ty_s1, ref ty_s2), Arrow(ref ty_t1, ref ty_t2)) => {
+            equivalent(ctx.clone(), *ty_s1.clone(), *ty_t1.clone()) &&
+                equivalent(ctx.clone(), *ty_s2.clone(), *ty_t2.clone())
+        }
+        _ => false,
+    }
+}
+
+pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
     use self::Term::*;
 
     match *t {
         True | False => Ok(Type::Bool),
+        Inert(ref t) => Ok(t.clone()),
+        Var(i, _) => get_type_from_context(c.clone(), i),
+        Abs(ref x, ref ty_t1, ref t2) => {
+            let ctx1 = add_binding(
+                c.clone(),
+                &Binding {
+                    label: x.clone(),
+                    binding: BindingType::VarBind(ty_t1.clone()),
+                },
+            );
+            type_of(ctx1, t2).and_then(|ty_t2: Type| {
+                Ok(Type::Arrow(Box::new(ty_t1.clone()), Box::new(ty_t2)))
+            })
+        }
+        App(ref t1, ref t2) => {
+            type_of(c.clone(), t1).and_then(|_: Type| {
+                type_of(c.clone(), t2).and_then(|ty_t2: Type| match ty_t2 {
+                    Type::Arrow(_, ref ty_t12) => {
+                        if ty_t2 == *ty_t12.clone() {
+                            Ok(*ty_t12.clone())
+                        } else {
+                            Err(ContextError::ParameterTypeMismatch)
+                        }
+                    }
+                    _ => Err(ContextError::ArrowExpected),
+                })
+            })
+        }
+        If(ref t1, ref t2, ref t3) => {
+            type_of(c.clone(), t1).and_then(|ty_t1: Type| if ty_t1 == Type::Bool {
+                type_of(c.clone(), t2).and_then(|ty_t2: Type| {
+                    type_of(c.clone(), t3).and_then(|ty_t3: Type| if ty_t2 == ty_t3 {
+                        Ok(ty_t2)
+                    } else {
+                        Err(ContextError::ConditionalWithArmsOfDifferentTypes)
+                    })
+                })
+            } else {
+                Err(ContextError::ConditionalWithGuardOfNotBoolean)
+            })
+        }
         _ => Err(ContextError::ParameterTypeMismatch),
     }
 }
 
 pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
     parser::parse(s.as_bytes())
-        .map(|t| eval(ctx, &t))
-        .and_then(|t| match type_of(&t) {
+        .map(|t| eval(ctx.clone(), &t))
+        .and_then(|t| match type_of(ctx, &t) {
             Ok(ty_t) => Ok(format!("{:?} : {:?}", t, ty_t)),
             Err(e) => Err(RunError::ContextError(e)),
         })
