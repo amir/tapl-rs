@@ -58,7 +58,6 @@ pub struct Binding {
     binding: BindingType,
 }
 
-
 pub enum EvalError {
     NoRuleApplies(Term),
 }
@@ -520,6 +519,8 @@ mod parser {
     extern crate nom;
 
     use std::str;
+    use std::error::Error;
+    use std::str::FromStr;
 
     use super::Term;
     use super::Type;
@@ -553,6 +554,23 @@ mod parser {
     fn is_identifier(chr: u8) -> bool {
         is_alphabetic(chr) || is_digit(chr) || is_prime(chr)
     }
+
+    named!(term_float <&[u8], ContextTermResult>,
+       do_parse!(
+           f0: take_while1!(is_digit) >>
+           char!('.')                 >>
+           f1: take_while1!(is_digit) >>
+           ({
+               let s = format!("{}.{}", tos(f0), tos(f1));
+               (Box::new(move |ctx: Context| -> Result<Term, RunError> {
+                   match f32::from_str(s.as_str()) {
+                       Ok(g) => Ok(Term::Float(g)),
+                       Err(e) => Err(RunError::ParseError(e.description().to_string()))
+                   }
+               }))
+           })
+        )
+    );
 
     named!(identifier, take_while1!(is_identifier));
 
@@ -614,8 +632,9 @@ mod parser {
     );
 
     named!(type_non_arrow <&[u8], Type>, alt!(
-        tag!("Bool") => { |_| Type::Bool } |
-        tag!("Nat")  => { |_| Type::Nat  }
+        tag!("Bool")  => { |_| Type::Bool  } |
+        tag!("Nat")   => { |_| Type::Nat   } |
+        tag!("Float") => { |_| Type::Float }
     ));
 
     named!(types <&[u8], Type>, alt!(
@@ -659,11 +678,11 @@ mod parser {
 
     named!(term_if <&[u8], ContextTermResult>,
         do_parse!(
-            opt!(complete!(char!('('))) >>
+            char!('(')   >>
             tag!("if")   >> multispace >> t0: term >> multispace >>
             tag!("then") >> multispace >> t1: term >> multispace >>
             tag!("else") >> multispace >> t2: term >>
-            opt!(complete!(char!(')'))) >>
+            char!(')')   >>
             (Box::new(move |ctx: Context| -> Result<Term, RunError> {
                 let r: Result<(Term, Term, Term), RunError> = t0(ctx.clone()).and_then(|f: Term| {
                     t1(ctx.clone()).and_then(|g: Term| {
@@ -691,11 +710,13 @@ mod parser {
     }));
 
     named!(term <&[u8], ContextTermResult>, alt!(
-        term_pred | term_succ | term_if | term_zero_arith | term_app | term_abs | term_var
+        term_float | term_pred | term_succ | term_if | term_zero_arith | term_app | term_abs | term_var
     ));
 
+    named!(command <&[u8], ContextTermResult>, alt!(term));
+
     pub fn parse(s: &[u8]) -> Result<Term, RunError> {
-        match term(s) {
+        match command(s) {
             IResult::Done(_, res) => (*res)(Context::new()),
             IResult::Error(e) => Err(RunError::ParseError(e.description().to_string())),
             IResult::Incomplete(e) => Err(RunError::ParseError(format!("Incomplete {:?}", e))),
