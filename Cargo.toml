@@ -5,6 +5,8 @@ authors = ["Amir Saeid <amir@glgdgt.com>"]
 
 [dependencies]
 nom = "3.2.0"
+pest = "^1.0.0-beta"
+pest_derive = "^1.0.0-beta"
 
 [[bin]]
 name = "arith"

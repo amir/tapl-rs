@@ -3,6 +3,8 @@ name = "tapl"
 version = "0.1.0"
 dependencies = [
  "nom 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest 1.0.0-beta.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest_derive 1.0.0-beta.13 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -26,7 +28,46 @@ dependencies = [
  "memchr 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
+[[package]]
+name = "pest"
+version = "1.0.0-beta.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "pest_derive"
+version = "1.0.0-beta.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "pest 1.0.0-beta.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "quote"
+version = "0.3.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "syn"
+version = "0.10.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "quote 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-xid 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "unicode-xid"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
 [metadata]
 "checksum libc 0.2.29 (registry+https://github.com/rust-lang/crates.io-index)" = "8a014d9226c2cc402676fbe9ea2e15dd5222cd1dd57f576b5b283178c944a264"
 "checksum memchr 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1dbccc0e46f1ea47b9f17e6d67c5a96bd27030519c519c9c91327e31275a47b4"
 "checksum nom 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "06989cbd367e06f787a451f3bc67d8c3e0eaa10b461cc01152ffab24261a31b1"
+"checksum pest 1.0.0-beta.13 (registry+https://github.com/rust-lang/crates.io-index)" = "bc3164244591a46f2415796c5c4d0b0e0920cb39593ce03412b719708eb6784c"
+"checksum pest_derive 1.0.0-beta.13 (registry+https://github.com/rust-lang/crates.io-index)" = "fd0b748a708496420662550e3d39ba39375bb0dffe41552056557d8a9291332d"
+"checksum quote 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)" = "7a6e920b65c65f10b2ae65c831a81a073a89edd28c7cce89475bff467ab4167a"
+"checksum syn 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)" = "58fd09df59565db3399efbba34ba8a2fec1307511ebd245d0061ff9d42691673"
+"checksum unicode-xid 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "8c1f860d7d29cf02cb2f3f359fd35991af3d30bac52c57d265a3c461074cb4dc"
