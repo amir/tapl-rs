@@ -1,0 +1,27 @@
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+
+command = { type_binder | binder }
+
+equal = { "=" }
+colon = { ":" }
+
+ucid = { 'A'..'Z' ~ alpha* }
+lcid = { 'a'..'z' ~ alpha* }
+
+bool = { "Bool" }
+nat = { "Nat" }
+
+arrow = { "->" }
+
+atomic_type = { bool ~ nat }
+
+arrow_type = { atomic_type ~ (arrow ~ arrow_type)* }
+
+type_binder = { ucid ~ (equal ~ arrow_type)? }
+
+term_if = { "if" ~ term ~ "then" ~ term ~ "else" ~ term }
+
+term = { term_if }
+
+binder = { lcid ~ ((colon ~ arrow_type) | (equal ~ term)) }

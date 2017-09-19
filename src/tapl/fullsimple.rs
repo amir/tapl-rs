@@ -516,211 +516,27 @@ pub enum RunError {
 }
 
 mod parser {
-    extern crate nom;
+    use pest::Parser;
 
-    use std::str;
-    use std::error::Error;
-    use std::str::FromStr;
+    #[derive(Parser)]
+    #[grammar = "fullsimple.pest"]
+    struct CommandParser;
 
     use super::Term;
-    use super::Type;
-    use super::Binding;
-    use super::Context;
     use super::RunError;
-    use super::BindingType;
-    use super::{add_binding, name_to_index};
-
-    use nom::IResult;
-    use nom::multispace;
-
-    type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
-
-    fn tos(s: &[u8]) -> String {
-        str::from_utf8(s).unwrap().to_owned()
-    }
-
-    fn is_alphabetic(chr: u8) -> bool {
-        (chr >= 0x41 && chr <= 0x5A) || (chr >= 0x61 && chr <= 0x7A)
-    }
-
-    fn is_digit(chr: u8) -> bool {
-        chr >= 0x30 && chr <= 0x39
-    }
-
-    fn is_prime(chr: u8) -> bool {
-        chr == 0x27
-    }
-
-    fn is_identifier(chr: u8) -> bool {
-        is_alphabetic(chr) || is_digit(chr) || is_prime(chr)
-    }
-
-    named!(term_float <&[u8], ContextTermResult>,
-       do_parse!(
-           f0: take_while1!(is_digit) >>
-           char!('.')                 >>
-           f1: take_while1!(is_digit) >>
-           ({
-               let s = format!("{}.{}", tos(f0), tos(f1));
-               (Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                   match f32::from_str(s.as_str()) {
-                       Ok(g) => Ok(Term::Float(g)),
-                       Err(e) => Err(RunError::ParseError(e.description().to_string()))
-                   }
-               }))
-           })
-        )
-    );
-
-    named!(identifier, take_while1!(is_identifier));
-
-    named!(term_var <&[u8], ContextTermResult>,
-        map!(identifier, |x| {
-            let s = tos(x);
-            Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                match name_to_index(ctx.clone(), &s) {
-                    Ok(n1) => Ok(Term::Var(n1, ctx.len())),
-                    Err(e) => Err(RunError::ContextError(e)),
-                }
-            })
-        })
-    );
-
-    named!(term_app <&[u8], ContextTermResult>,
-        do_parse!(
-            char!('(')       >>
-            opt!(multispace) >>
-            t1: term         >>
-            multispace       >>
-            t2: term         >>
-            opt!(multispace) >>
-            char!(')')       >>
-            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                let r: Result<(Term, Term), RunError> = t1(ctx.clone()).and_then(|f: Term| {
-                    t2(ctx.clone()).map(|g: Term| (f,g))
-                });
-
-                r.map(|(f,g)| Term::App(Box::new(f), Box::new(g)))
-            }))
-        )
-    );
-
-    named!(term_succ <&[u8], ContextTermResult>,
-        do_parse!(
-            char!('(')   >>
-            tag!("succ") >>
-            multispace   >>
-            t0: term     >>
-            char!(')')   >>
-            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                t0(ctx.clone()).and_then(|t: Term| Ok(Term::Succ(Box::new(t))))
-            }))
-        )
-    );
-
-    named!(term_pred <&[u8], ContextTermResult>,
-        do_parse!(
-            char!('(')   >>
-            tag!("pred") >>
-            multispace   >>
-            t0: term     >>
-            char!(')')   >>
-            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                t0(ctx.clone()).and_then(|t: Term| Ok(Term::Pred(Box::new(t))))
-            }))
-        )
-    );
-
-    named!(type_non_arrow <&[u8], Type>, alt!(
-        tag!("Bool")  => { |_| Type::Bool  } |
-        tag!("Nat")   => { |_| Type::Nat   } |
-        tag!("Float") => { |_| Type::Float }
-    ));
-
-    named!(types <&[u8], Type>, alt!(
-            do_parse!(
-                t1: type_non_arrow >>
-                tag!("->")         >>
-                t2: type_non_arrow >>
-                (Type::Arrow(Box::new(t1), Box::new(t2)))
-            )                                   |
-            type_non_arrow
-        )
-    );
-
-    named!(term_abs <&[u8], ContextTermResult>,
-        do_parse!(
-            char!('(')       >>
-            opt!(multispace) >>
-            tag!("lambda")   >>
-            multispace       >>
-            x: identifier    >>
-            char!(':')       >>
-            xt: types        >>
-            char!('.')       >>
-            multispace       >>
-            t1: term         >>
-            opt!(multispace) >>
-            char!(')')       >>
-            ({
-                let s = tos(x);
-                Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                    let b = &Binding {
-                        label: s.clone(),
-                        binding: BindingType::VarBind(xt.clone()),
-                    };
-                    let c2 = add_binding(ctx, b);
-                    t1(c2).and_then(|t: Term| Ok(Term::Abs(s.clone(), xt.clone(), Box::new(t))))
-                })
-            })
-        )
-    );
-
-    named!(term_if <&[u8], ContextTermResult>,
-        do_parse!(
-            char!('(')   >>
-            tag!("if")   >> multispace >> t0: term >> multispace >>
-            tag!("then") >> multispace >> t1: term >> multispace >>
-            tag!("else") >> multispace >> t2: term >>
-            char!(')')   >>
-            (Box::new(move |ctx: Context| -> Result<Term, RunError> {
-                let r: Result<(Term, Term, Term), RunError> = t0(ctx.clone()).and_then(|f: Term| {
-                    t1(ctx.clone()).and_then(|g: Term| {
-                        t2(ctx.clone()).map(|h: Term| (f,g,h))
-                    })
-                });
-
-                r.map(|(f,g,h)| Term::If(Box::new(f), Box::new(g), Box::new(h)))
-            }))
-        )
-    );
-
-    named!(term_zero_arith0 <&[u8], Term>, alt!(
-            tag!("true")  => { |_| Term::True  } |
-            tag!("false") => { |_| Term::False } |
-            tag!("unit")  => { |_| Term::Unit  } |
-            tag!("zero")  => { |_| Term::Zero  }
-        )
-    );
-
-    named!(term_zero_arith <&[u8], ContextTermResult>, map!(term_zero_arith0, |x| {
-        Box::new(move |ctx: Context| -> Result<Term, RunError> {
-            Ok(x.clone())
-        })
-    }));
-
-    named!(term <&[u8], ContextTermResult>, alt!(
-        term_float | term_pred | term_succ | term_if | term_zero_arith | term_app | term_abs | term_var
-    ));
-
-    named!(command <&[u8], ContextTermResult>, alt!(term));
+    use std::str;
 
     pub fn parse(s: &[u8]) -> Result<Term, RunError> {
-        match command(s) {
-            IResult::Done(_, res) => (*res)(Context::new()),
-            IResult::Error(e) => Err(RunError::ParseError(e.description().to_string())),
-            IResult::Incomplete(e) => Err(RunError::ParseError(format!("Incomplete {:?}", e))),
+        let commands = CommandParser::parse_str(Rule::command, str::from_utf8(s).unwrap())
+            .unwrap_or_else(|e| panic!("{}", e));
+
+        for command in commands {
+            for inner_c in command.into_inner() {
+                println!("{:?}", inner_c);
+            }
         }
+
+        Ok(Term::Unit)
     }
 }
 
