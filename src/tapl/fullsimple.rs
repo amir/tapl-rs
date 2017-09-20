@@ -520,19 +520,22 @@ mod parser {
 
     #[derive(Parser)]
     #[grammar = "fullsimple.pest"]
-    struct CommandParser;
+    struct ProgramParser;
 
     use super::Term;
     use super::RunError;
     use std::str;
 
     pub fn parse(s: &[u8]) -> Result<Term, RunError> {
-        let commands = CommandParser::parse_str(Rule::command, str::from_utf8(s).unwrap())
+        let program = ProgramParser::parse_str(Rule::program, str::from_utf8(s).unwrap())
             .unwrap_or_else(|e| panic!("{}", e));
 
-        for command in commands {
-            for inner_c in command.into_inner() {
-                println!("{:?}", inner_c);
+        for command in program {
+            for c in command.into_inner() {
+                match c.as_rule() {
+                    Rule::type_binder => println!("bind: {}", c.into_span().as_str()),
+                    otherwise => println!("otherwise: {:?}", otherwise),
+                }
             }
         }
 
