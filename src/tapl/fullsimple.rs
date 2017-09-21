@@ -553,7 +553,7 @@ fn is_type_abb(c: Context, i: usize) -> bool {
 fn get_type_abb(c: Context, i: usize) -> Result<Type, EvalError> {
     match get_binding(c, i) {
         Ok(self::BindingType::TypeAbbBind(ref t)) => Ok(t.clone()),
-        _ => Err(EvalError::NoRuleApplies(Term::False)), // introduce a dummy term
+        _ => Err(EvalError::NoRuleApplies(Term::Unit)), // introduce a dummy term
     }
 }
 
@@ -562,7 +562,7 @@ fn compute_type(ctx: Context, ty_t: Type) -> Result<Type, EvalError> {
         Type::Var(ref i, _) if is_type_abb(ctx.clone(), i.clone()) => {
             get_type_abb(ctx.clone(), i.clone())
         }
-        _ => Err(EvalError::NoRuleApplies(Term::False)), // introduce a dummy term
+        _ => Err(EvalError::NoRuleApplies(Term::Unit)), // introduce a dummy term
     }
 }
 
