@@ -38,7 +38,7 @@ pub enum Term {
     Inert(Type),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BindingType {
     NameBind,
     TypeVarBind,
@@ -52,7 +52,7 @@ pub enum Command {
     Bind(String, BindingType),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Binding {
     label: String,
     binding: BindingType,
@@ -516,28 +516,90 @@ pub enum RunError {
 }
 
 mod parser {
+    use std::str;
     use pest::Parser;
+    use pest::iterators::Pair;
+    use pest::inputs::StrInput;
 
     #[derive(Parser)]
     #[grammar = "fullsimple.pest"]
     struct ProgramParser;
 
     use super::Term;
+    use super::Type;
+    use super::Binding;
+    use super::BindingType;
+    use super::Context;
     use super::RunError;
-    use std::str;
+    use super::add_name;
 
-    pub fn parse(s: &[u8]) -> Result<Term, RunError> {
-        let program = ProgramParser::parse_str(Rule::program, str::from_utf8(s).unwrap())
-            .unwrap_or_else(|e| panic!("{}", e));
+    type ContextTermResult = Box<Fn(Context) -> Result<(Binding, Context), RunError>>;
 
-        for command in program {
-            for c in command.into_inner() {
-                match c.as_rule() {
-                    Rule::type_binder => println!("bind: {}", c.into_span().as_str()),
-                    otherwise => println!("otherwise: {:?}", otherwise),
+    fn to_type(pair: Pair<Rule, StrInput>) -> Type {
+        match pair.as_rule() {
+            Rule::bool => Type::Bool,
+            Rule::nat => Type::Nat,
+            Rule::arrow_type => {
+                let mut pair = pair.clone().into_inner().peekable();
+                let f = pair.next().unwrap();
+                if pair.peek().is_none() {
+                    to_type(f)
+                } else {
+                    let g = pair.skip(1).next().unwrap();
+                    Type::Arrow(Box::new(to_type(f)), Box::new(to_type(g)))
                 }
             }
+            Rule::atomic_type => to_type(pair.clone().into_inner().next().unwrap()),
+            otherwise => {
+                println!("otherwise: {:?}", otherwise);
+                Type::Unit
+            }
         }
+    }
+
+    fn consume(pair: Pair<Rule, StrInput>) {
+
+        fn command(pair: Pair<Rule, StrInput>) -> ContextTermResult {
+            let pair = pair.into_inner().next().unwrap();
+
+            match pair.as_rule() {
+                Rule::type_binder => {
+                    let mut pairs = pair.into_inner();
+                    let lhs = pairs.next().unwrap().into_span().as_str().to_owned();
+                    let rhs = pairs.skip(1).next().unwrap();
+                    let ty = to_type(rhs.clone());
+
+                    Box::new(
+                        move |ctx: Context| -> Result<(Binding, Context), RunError> {
+                            let nc = add_name(ctx, lhs.to_string());
+                            Ok((
+                                Binding {
+                                    label: lhs.to_string(),
+                                    binding: BindingType::TypeAbbBind(ty.clone()),
+                                },
+                                nc,
+                            ))
+                        },
+                    )
+                }
+                otherwise => Box::new(
+                    move |ctx: Context| -> Result<(Binding, Context), RunError> {
+                        Err(RunError::ParseError(format!("{:?}", otherwise)))
+                    },
+                ),
+            }
+        }
+
+        println!("{:?}", command(pair)(Context::new()));
+    }
+
+    pub fn parse(s: &[u8]) -> Result<Term, RunError> {
+        consume(
+            ProgramParser::parse_str(Rule::program, str::from_utf8(s).unwrap())
+                .unwrap()
+                .next()
+                .unwrap(),
+        );
 
         Ok(Term::Unit)
     }

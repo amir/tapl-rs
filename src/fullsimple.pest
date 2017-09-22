@@ -1,7 +1,7 @@
 alpha = { 'a'..'z' | 'A'..'Z' }
 digit = { '0'..'9' }
 
-command = { type_binder | binder }
+command = { type_binder | binder | term }
 
 colon = { ":" }
 equal = { "=" }
@@ -17,14 +17,21 @@ arrow = { "->" }
 
 atomic_type = { bool | nat }
 
+term_true = { "true" }
+term_false = { "false" }
+
+atomic_term = { term_true | term_false }
+
 arrow_type = { atomic_type ~ arrow ~ arrow_type | atomic_type }
 
 type_binder = { ucid ~ equal ~ arrow_type ~ semi }
 
-term_if = { "if" ~ term ~ "then" ~ term ~ "else" ~ term }
+term_if = { "if" ~ term ~ "then" ~ term ~ "else" ~ term ~ semi }
 
 term = { term_if }
 
 binder = { lcid ~ ((colon ~ arrow_type) | (equal ~ term)) }
 
 program = _{ soi ~ command* ~ eoi }
+
+whitespace = { " " }
