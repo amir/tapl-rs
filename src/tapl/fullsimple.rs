@@ -47,9 +47,10 @@ pub enum BindingType {
     TypeAbbBind(Type),
 }
 
+#[derive(Debug)]
 pub enum Command {
     Eval(Term),
-    Bind(String, BindingType),
+    Bind(Binding),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -527,13 +528,14 @@ mod parser {
 
     use super::Term;
     use super::Type;
+    use super::Command;
     use super::Binding;
     use super::BindingType;
     use super::Context;
     use super::RunError;
     use super::add_name;
 
-    type ContextTermResult = Box<Fn(Context) -> Result<(Binding, Context), RunError>>;
+    type ContextCommandResult = Box<Fn(Context) -> Result<Command, RunError>>;
 
     fn to_type(pair: Pair<Rule, StrInput>) -> Type {
         match pair.as_rule() {
@@ -551,15 +553,50 @@ mod parser {
             }
             Rule::atomic_type => to_type(pair.clone().into_inner().next().unwrap()),
             otherwise => {
-                println!("otherwise: {:?}", otherwise);
+                println!("otherwise:: {:?}", otherwise);
                 Type::Unit
+            }
+        }
+    }
+
+    fn to_term(pair: Pair<Rule, StrInput>) -> Term {
+        match pair.as_rule() {
+            Rule::term_lambda => {
+                let pair = pair.into_inner();
+                let id = pair.clone()
+                    .skip(1)
+                    .next()
+                    .unwrap()
+                    .into_span()
+                    .as_str()
+                    .to_owned();
+                let ty = pair.clone()
+                    .skip(3)
+                    .next()
+                    .unwrap()
+                    .into_inner()
+                    .next()
+                    .unwrap();
+                let trm = pair.clone()
+                    .skip(5)
+                    .next()
+                    .unwrap()
+                    .into_inner()
+                    .next()
+                    .unwrap();
+
+                Term::Abs(id, to_type(ty), Box::new(to_term(trm)))
+            }
+            otherwise => {
+                println!("otherwise: {:?}", otherwise);
+                Term::Unit
             }
         }
     }
 
     fn consume(pair: Pair<Rule, StrInput>) {
 
-        fn command(pair: Pair<Rule, StrInput>) -> ContextTermResult {
+        fn command(pair: Pair<Rule, StrInput>) -> ContextCommandResult {
             let pair = pair.into_inner().next().unwrap();
 
             match pair.as_rule() {
@@ -569,24 +606,50 @@ mod parser {
                     let rhs = pairs.skip(1).next().unwrap();
                     let ty = to_type(rhs.clone());
 
-                    Box::new(
-                        move |ctx: Context| -> Result<(Binding, Context), RunError> {
-                            let nc = add_name(ctx, lhs.to_string());
-                            Ok((
-                                Binding {
-                                    label: lhs.to_string(),
-                                    binding: BindingType::TypeAbbBind(ty.clone()),
-                                },
-                                nc,
-                            ))
-                        },
-                    )
+                    Box::new(move |ctx: Context| -> Result<Command, RunError> {
+                        Ok(Command::Bind(Binding {
+                            label: lhs.to_string(),
+                            binding: BindingType::TypeAbbBind(ty.clone()),
+                        }))
+                    })
                 }
-                otherwise => Box::new(
-                    move |ctx: Context| -> Result<(Binding, Context), RunError> {
-                        Err(RunError::ParseError(format!("{:?}", otherwise)))
-                    },
-                ),
+                Rule::binder => {
+                    let mut pairs = pair.into_inner();
+                    let lhs = pairs.next().unwrap().into_span().as_str().to_owned();
+                    let s = pairs.next().unwrap().as_rule();
+                    let rhs = pairs.next().unwrap().clone();
+
+                    let binding = match s {
+                        Rule::colon => {
+                            let ty = to_type(rhs);
+                            Binding {
+                                label: lhs.to_string(),
+                                binding: BindingType::VarBind(ty),
+                            }
+                        }
+                        Rule::equal => {
+                            let term = to_term(rhs);
+                            Binding {
+                                label: lhs.to_string(),
+                                binding: BindingType::TermAbbBind(term, None),
+                            }
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    Box::new(move |ctx: Context| -> Result<Command, RunError> {
+                        Ok(Command::Bind(binding.clone()))
+                    })
+                }
+                Rule::term => {
+                    println!("{:?}", to_term(pair.into_inner().next().unwrap()));
+                    Box::new(move |_: Context| -> Result<Command, RunError> {
+                        Err(RunError::ParseError(format!("{:?}", "A")))
+                    })
+                }
+                otherwise => Box::new(move |_: Context| -> Result<Command, RunError> {
+                    Err(RunError::ParseError(format!("{:?}", otherwise)))
+                }),
             }
         }
 
@@ -745,7 +808,7 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
         Float(_) => Ok(Type::Float),
         Zero => Ok(Type::Nat),
         Unit => Ok(Type::Unit),
-        _ => Err(ContextError::ParameterTypeMismatch), 
+        _ => Err(ContextError::ParameterTypeMismatch),
     }
 }
 

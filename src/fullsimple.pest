@@ -1,14 +1,19 @@
-alpha = { 'a'..'z' | 'A'..'Z' }
-digit = { '0'..'9' }
-
 command = { type_binder | binder | term }
 
-colon = { ":" }
-equal = { "=" }
-semi  = { ";" }
+asc    = { "as" }
+colon  = { ":" }
+dot    = { "." }
+equal  = { "=" }
+lambda = { "lambda" }
+lparen = { "(" }
+rparen = { ")" }
+semi   = { ";" }
 
 ucid = { 'A'..'Z' ~ alpha* }
 lcid = { 'a'..'z' ~ alpha* }
+
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
 
 bool = { "Bool" }
 nat = { "Nat" }
@@ -22,16 +27,25 @@ term_false = { "false" }
 
 atomic_term = { term_true | term_false }
 
+typ = { arrow_type }
 arrow_type = { atomic_type ~ arrow ~ arrow_type | atomic_type }
 
 type_binder = { ucid ~ equal ~ arrow_type ~ semi }
 
+app_term = { path_term }
+
 term_if = { "if" ~ term ~ "then" ~ term ~ "else" ~ term ~ semi }
 
-term = { term_if }
+term_lambda = { lambda ~ lcid ~ colon ~ typ ~ dot ~ term }
 
-binder = { lcid ~ ((colon ~ arrow_type) | (equal ~ term)) }
+term = { app_term | term_if | term_lambda }
+
+path_term = { ascribe_term }
+
+ascribe_term = { (atomic_term ~ asc ~ arrow_type) | atomic_term }
+
+binder = { lcid ~ ((colon ~ arrow_type) | (equal ~ term)) ~ semi }
 
 program = _{ soi ~ command* ~ eoi }
 
-whitespace = { " " }
+whitespace = _{ " " }
