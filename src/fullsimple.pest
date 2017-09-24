@@ -1,5 +1,6 @@
 command = { type_binder | binder | term }
 
+arrow  = { "->" }
 asc    = { "as" }
 colon  = { ":" }
 dot    = { "." }
@@ -8,27 +9,23 @@ lambda = { "lambda" }
 lparen = { "(" }
 rparen = { ")" }
 semi   = { ";" }
+uscore = { "_" }
 
-ucid = { 'A'..'Z' ~ alpha* }
-lcid = { 'a'..'z' ~ alpha* }
-
+ucid  = { 'A'..'Z' ~ alpha* }
+lcid  = { 'a'..'z' ~ alpha* }
 alpha = { 'a'..'z' | 'A'..'Z' }
 digit = { '0'..'9' }
 
 bool = { "Bool" }
 nat = { "Nat" }
-
-arrow = { "->" }
-
 atomic_type = { bool | nat }
 
 term_true = { "true" }
 term_false = { "false" }
-
 atomic_term = { term_true | term_false }
 
-typ = { arrow_type }
 arrow_type = { atomic_type ~ arrow ~ arrow_type | atomic_type }
+typ = { arrow_type }
 
 type_binder = { ucid ~ equal ~ arrow_type ~ semi }
 

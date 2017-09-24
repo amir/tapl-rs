@@ -47,7 +47,7 @@ pub enum BindingType {
     TypeAbbBind(Type),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Command {
     Eval(Term),
     Bind(Binding),
@@ -562,31 +562,20 @@ mod parser {
     fn to_term(pair: Pair<Rule, StrInput>) -> Term {
         match pair.as_rule() {
             Rule::term_lambda => {
-                let pair = pair.into_inner();
-                let id = pair.clone()
-                    .skip(1)
-                    .next()
-                    .unwrap()
-                    .into_span()
-                    .as_str()
-                    .to_owned();
-                let ty = pair.clone()
-                    .skip(3)
-                    .next()
-                    .unwrap()
-                    .into_inner()
-                    .next()
-                    .unwrap();
-                let trm = pair.clone()
-                    .skip(5)
-                    .next()
-                    .unwrap()
-                    .into_inner()
-                    .next()
-                    .unwrap();
+                let mut pair = pair.into_inner().skip(1);
+                let id = pair.next().unwrap().as_str().to_owned();
+                let mut pair = pair.skip(1);
+                let ty = pair.next().unwrap().into_inner().next().unwrap();
+                let mut pair = pair.skip(1);
+                let trm = pair.next().unwrap().into_inner().next().unwrap();
 
                 Term::Abs(id, to_type(ty), Box::new(to_term(trm)))
             }
+            Rule::app_term => to_term(pair.into_inner().next().unwrap()),
+            Rule::path_term => to_term(pair.into_inner().next().unwrap()),
+            Rule::ascribe_term => to_term(pair.into_inner().next().unwrap()),
+            Rule::atomic_term => to_term(pair.into_inner().next().unwrap()),
+            Rule::term_true => Term::True,
             otherwise => {
                 println!("otherwise: {:?}", otherwise);
                 Term::Unit
@@ -594,7 +583,7 @@ mod parser {
         }
     }
 
-    fn consume(pair: Pair<Rule, StrInput>) {
+    fn consume(pair: Pair<Rule, StrInput>) -> ContextCommandResult {
 
         fn command(pair: Pair<Rule, StrInput>) -> ContextCommandResult {
             let pair = pair.into_inner().next().unwrap();
@@ -642,29 +631,28 @@ mod parser {
                     })
                 }
                 Rule::term => {
-                    println!("{:?}", to_term(pair.into_inner().next().unwrap()));
+                    let mut pairs = pair.into_inner();
+                    let t = to_term(pairs.next().unwrap());
                     Box::new(move |_: Context| -> Result<Command, RunError> {
-                        Err(RunError::ParseError(format!("{:?}", "A")))
+                        Ok(Command::Eval(t.clone()))
                     })
                 }
                 otherwise => Box::new(move |_: Context| -> Result<Command, RunError> {
-                    Err(RunError::ParseError(format!("{:?}", otherwise)))
+                    Err(RunError::ParseError(format!("otherwise {:?}", otherwise)))
                 }),
             }
         }
 
-        println!("{:?}", command(pair)(Context::new()));
+        command(pair)
     }
 
-    pub fn parse(s: &[u8]) -> Result<Term, RunError> {
+    pub fn parse(s: &[u8], ctx: Context) -> Result<Command, RunError> {
         consume(
             ProgramParser::parse_str(Rule::program, str::from_utf8(s).unwrap())
                 .unwrap()
                 .next()
                 .unwrap(),
-        );
-
-        Ok(Term::Unit)
+        )(ctx)
     }
 }
 
@@ -813,16 +801,39 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
 }
 
 pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
-    parser::parse(s.as_bytes())
-        .map(|t| eval(ctx.clone(), &t))
-        .and_then(|t| match type_of(ctx, &t) {
-            Ok(ty_t) => Ok(format!("{:?} : {:?}", t, ty_t)),
-            Err(e) => Err(RunError::ContextError(e)),
-        })
+    parser::parse(s.as_bytes(), ctx.clone()).and_then(|c: Command| match c {
+        self::Command::Eval(e) => Ok(format!("Eval {:?}", eval(ctx.clone(), &e))),
+        otherwise => Err(RunError::ParseError(format!("{:?}", otherwise))),
+    })
+}
+
+#[cfg(test)]
+mod parser_tests {
+    use pest::Parser;
+
+    #[derive(Parser)]
+    #[grammar = "fullsimple.pest"]
+    struct ProgramParser;
+
+    #[test]
+    fn true_lit() {
+        parses_to! {
+            parser: ProgramParser,
+            input: "true",
+            rule: Rule::atomic_term,
+            tokens: [
+                atomic_term(0, 4, [term_true(0,4)])
+            ]
+        };
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::parser;
+    use super::Term;
+    use super::Type;
+    use super::Command;
     use super::Binding;
     use super::Context;
     use super::Term::*;
@@ -872,5 +883,16 @@ mod tests {
         let t = &TimesFloat(Box::new(Float(2.5)), Box::new(Float(2.5)));
 
         assert_eq!(Float(6.25), super::eval(ctx, t));
+    }
+
+    #[test]
+    fn parse_test() {
+        let ctx = Context::new();
+        assert_eq!(
+            parser::parse(b"lambda x:Bool.  true", ctx.clone())
+                .ok()
+                .unwrap(),
+            Command::Eval(Abs(String::from("x"), Type::Bool, Box::new(True)))
+        );
     }
 }
