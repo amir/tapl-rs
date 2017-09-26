@@ -1,0 +1,12 @@
+use std::str::FromStr;
+use tapl::fullsimple::ast::{Term, Type};
+
+grammar;
+
+pub Term: Box<Term> = {
+    "true" => Box::new(Term::True),
+    "false" => Box::new(Term::False),
+    "zero" => Box::new(Term::Zero),
+    "succ(" <Term> ")" => Box::new(Term::Succ(<>)),
+    "iszero(" <Term> ")" => Box::new(Term::IsZero(<>)),
+};

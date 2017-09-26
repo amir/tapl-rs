@@ -7,7 +7,7 @@ use tapl::tapl::fullsimple;
 
 fn main() {
     let mut input = String::new();
-    let context = fullsimple::Context::new();
+    let context = tapl::tapl::fullsimple::Context::new();
     loop {
         print!("> ");
         io::stdout().flush().unwrap();

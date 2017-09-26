@@ -1,42 +1,5 @@
-#[derive(Clone, Debug, PartialEq)]
-pub enum Type {
-    Var(usize, usize),
-    Id(String),
-    Arrow(Box<Type>, Box<Type>),
-    Unit,
-    Record(Vec<(String, Box<Type>)>),
-    Variant(Vec<(String, Box<Type>)>),
-    Bool,
-    Str,
-    Float,
-    Nat,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Term {
-    True,
-    False,
-    If(Box<Term>, Box<Term>, Box<Term>),
-    Case(Box<Term>, Vec<(String, (String, Box<Term>))>),
-    Tag(String, Box<Term>, Type),
-    Var(usize, usize),
-    Abs(String, Type, Box<Term>),
-    App(Box<Term>, Box<Term>),
-    Let(String, Box<Term>, Box<Term>),
-    Fix(Box<Term>),
-    Str(String),
-    Unit,
-    Ascribe(Box<Term>, Type),
-    Record(Vec<(String, Box<Term>)>),
-    Projection(Box<Term>, String),
-    Float(f32),
-    TimesFloat(Box<Term>, Box<Term>),
-    Zero,
-    Succ(Box<Term>),
-    Pred(Box<Term>),
-    IsZero(Box<Term>),
-    Inert(Type),
-}
+use tapl::fullsimple::ast::{Term, Type};
+use tapl::fullsimple::parser;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BindingType {
@@ -64,7 +27,7 @@ pub enum EvalError {
 }
 
 fn is_numeric_val(term: &Term) -> bool {
-    use self::Term::*;
+    use tapl::fullsimple::ast::Term::*;
 
     match *term {
         Zero => true,
@@ -74,7 +37,7 @@ fn is_numeric_val(term: &Term) -> bool {
 }
 
 fn isval(term: &Term) -> bool {
-    use self::Term::*;
+    use tapl::fullsimple::ast::Term::*;
 
     match *term {
         True | False | Str(_) | Float(_) | Unit | Abs(_, _, _) => true,
@@ -86,7 +49,7 @@ fn isval(term: &Term) -> bool {
 }
 
 fn eval1(ctx: Context, term: &Term) -> Result<Term, EvalError> {
-    use self::Term::*;
+    use tapl::fullsimple::ast::Term::*;
 
     match *term {
         If(box True, ref t2, _) => Ok(*t2.clone()),
@@ -190,7 +153,7 @@ fn term_map(
     c: usize,
     t: &Term,
 ) -> Term {
-    use self::Term::*;
+    use tapl::fullsimple::ast::Term::*;
 
     fn walk(
         onvar: &Fn(usize, usize) -> Term,
@@ -280,7 +243,7 @@ fn term_map(
 }
 
 fn term_shift_above(d: i32, c: usize, t: &Term) -> Term {
-    use self::Term::*;
+    use tapl::fullsimple::ast::Term::*;
 
     fn _onvar(d: i32, c: usize, x: usize, n: usize) -> Term {
         if x >= c {
@@ -393,7 +356,7 @@ fn binding_shift(d: i32, bind: &BindingType) -> BindingType {
 }
 
 fn term_subst(j: usize, s: &Term, t: &Term) -> Term {
-    use self::Term::Var;
+    use tapl::fullsimple::ast::Term::Var;
 
     fn _onvar(j: usize, s: &Term, x: usize, n: usize) -> Term {
         if x == j {
@@ -415,7 +378,7 @@ fn term_subst_top(s: &Term, t: &Term) -> Term {
 }
 
 fn type_term_subst(ty_s: &Type, j: usize, t: &Term) -> Term {
-    use self::Term::Var;
+    use tapl::fullsimple::ast::Term::Var;
 
     fn onvar(x: usize, n: usize) -> Term {
         Var(x, n)
@@ -516,146 +479,6 @@ pub enum RunError {
     ContextError(ContextError),
 }
 
-mod parser {
-    use std::str;
-    use pest::Parser;
-    use pest::iterators::Pair;
-    use pest::inputs::StrInput;
-
-    #[derive(Parser)]
-    #[grammar = "fullsimple.pest"]
-    struct ProgramParser;
-
-    use super::Term;
-    use super::Type;
-    use super::Command;
-    use super::Binding;
-    use super::BindingType;
-    use super::Context;
-    use super::RunError;
-    use super::add_name;
-
-    type ContextCommandResult = Box<Fn(Context) -> Result<Command, RunError>>;
-
-    fn to_type(pair: Pair<Rule, StrInput>) -> Type {
-        match pair.as_rule() {
-            Rule::bool => Type::Bool,
-            Rule::nat => Type::Nat,
-            Rule::arrow_type => {
-                let mut pair = pair.clone().into_inner().peekable();
-                let f = pair.next().unwrap();
-                if pair.peek().is_none() {
-                    to_type(f)
-                } else {
-                    let g = pair.skip(1).next().unwrap();
-                    Type::Arrow(Box::new(to_type(f)), Box::new(to_type(g)))
-                }
-            }
-            Rule::atomic_type => to_type(pair.clone().into_inner().next().unwrap()),
-            otherwise => {
-                println!("otherwise:: {:?}", otherwise);
-                Type::Unit
-            }
-        }
-    }
-
-    fn to_term(pair: Pair<Rule, StrInput>) -> Term {
-        match pair.as_rule() {
-            Rule::term_lambda => {
-                let mut pair = pair.into_inner().skip(1);
-                let id = pair.next().unwrap().as_str().to_owned();
-                let mut pair = pair.skip(1);
-                let ty = pair.next().unwrap().into_inner().next().unwrap();
-                let mut pair = pair.skip(1);
-                let trm = pair.next().unwrap().into_inner().next().unwrap();
-
-                Term::Abs(id, to_type(ty), Box::new(to_term(trm)))
-            }
-            Rule::app_term => to_term(pair.into_inner().next().unwrap()),
-            Rule::path_term => to_term(pair.into_inner().next().unwrap()),
-            Rule::ascribe_term => to_term(pair.into_inner().next().unwrap()),
-            Rule::atomic_term => to_term(pair.into_inner().next().unwrap()),
-            Rule::term_true => Term::True,
-            otherwise => {
-                println!("otherwise: {:?}", otherwise);
-                Term::Unit
-            }
-        }
-    }
-
-    fn consume(pair: Pair<Rule, StrInput>) -> ContextCommandResult {
-
-        fn command(pair: Pair<Rule, StrInput>) -> ContextCommandResult {
-            let pair = pair.into_inner().next().unwrap();
-
-            match pair.as_rule() {
-                Rule::type_binder => {
-                    let mut pairs = pair.into_inner();
-                    let lhs = pairs.next().unwrap().into_span().as_str().to_owned();
-                    let rhs = pairs.skip(1).next().unwrap();
-                    let ty = to_type(rhs.clone());
-
-                    Box::new(move |ctx: Context| -> Result<Command, RunError> {
-                        Ok(Command::Bind(Binding {
-                            label: lhs.to_string(),
-                            binding: BindingType::TypeAbbBind(ty.clone()),
-                        }))
-                    })
-                }
-                Rule::binder => {
-                    let mut pairs = pair.into_inner();
-                    let lhs = pairs.next().unwrap().into_span().as_str().to_owned();
-                    let s = pairs.next().unwrap().as_rule();
-                    let rhs = pairs.next().unwrap().clone();
-
-                    let binding = match s {
-                        Rule::colon => {
-                            let ty = to_type(rhs);
-                            Binding {
-                                label: lhs.to_string(),
-                                binding: BindingType::VarBind(ty),
-                            }
-                        }
-                        Rule::equal => {
-                            let term = to_term(rhs);
-                            Binding {
-                                label: lhs.to_string(),
-                                binding: BindingType::TermAbbBind(term, None),
-                            }
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    Box::new(move |ctx: Context| -> Result<Command, RunError> {
-                        Ok(Command::Bind(binding.clone()))
-                    })
-                }
-                Rule::term => {
-                    let mut pairs = pair.into_inner();
-                    let t = to_term(pairs.next().unwrap());
-                    Box::new(move |_: Context| -> Result<Command, RunError> {
-                        Ok(Command::Eval(t.clone()))
-                    })
-                }
-                otherwise => Box::new(move |_: Context| -> Result<Command, RunError> {
-                    Err(RunError::ParseError(format!("otherwise {:?}", otherwise)))
-                }),
-            }
-        }
-
-        command(pair)
-    }
-
-    pub fn parse(s: &[u8], ctx: Context) -> Result<Command, RunError> {
-        consume(
-            ProgramParser::parse_str(Rule::program, str::from_utf8(s).unwrap())
-                .unwrap()
-                .next()
-                .unwrap(),
-        )(ctx)
-    }
-}
-
 fn is_type_abb(c: Context, i: usize) -> bool {
     match get_binding(c, i) {
         Ok(self::BindingType::TypeAbbBind(_)) => true,
@@ -720,7 +543,7 @@ fn equivalent(ctx: Context, ty_s: Type, ty_t: Type) -> bool {
 }
 
 pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
-    use self::Term::*;
+    use tapl::fullsimple::ast::Term::*;
 
     match *t {
         True | False => Ok(Type::Bool),
@@ -800,43 +623,15 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
     }
 }
 
-pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
-    parser::parse(s.as_bytes(), ctx.clone()).and_then(|c: Command| match c {
-        self::Command::Eval(e) => Ok(format!("Eval {:?}", eval(ctx.clone(), &e))),
-        otherwise => Err(RunError::ParseError(format!("{:?}", otherwise))),
-    })
-}
-
-#[cfg(test)]
-mod parser_tests {
-    use pest::Parser;
-
-    #[derive(Parser)]
-    #[grammar = "fullsimple.pest"]
-    struct ProgramParser;
-
-    #[test]
-    fn true_lit() {
-        parses_to! {
-            parser: ProgramParser,
-            input: "true",
-            rule: Rule::atomic_term,
-            tokens: [
-                atomic_term(0, 4, [term_true(0,4)])
-            ]
-        };
-    }
-}
 
 #[cfg(test)]
 mod tests {
-    use super::parser;
-    use super::Term;
-    use super::Type;
+    use tapl::fullsimple::ast::Term;
+    use tapl::fullsimple::ast::Type;
     use super::Command;
     use super::Binding;
     use super::Context;
-    use super::Term::*;
+    use tapl::fullsimple::ast::Term::*;
     use super::BindingType::*;
 
     #[test]
@@ -883,16 +678,5 @@ mod tests {
         let t = &TimesFloat(Box::new(Float(2.5)), Box::new(Float(2.5)));
 
         assert_eq!(Float(6.25), super::eval(ctx, t));
-    }
-
-    #[test]
-    fn parse_test() {
-        let ctx = Context::new();
-        assert_eq!(
-            parser::parse(b"lambda x:Bool.  true", ctx.clone())
-                .ok()
-                .unwrap(),
-            Command::Eval(Abs(String::from("x"), Type::Bool, Box::new(True)))
-        );
     }
 }
