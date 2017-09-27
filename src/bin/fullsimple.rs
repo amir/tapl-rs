@@ -3,11 +3,11 @@ extern crate tapl;
 use std::io;
 use std::io::Write;
 
-use tapl::tapl::fullsimple;
+use tapl::tapl::fullsimple::fullsimple;
 
 fn main() {
     let mut input = String::new();
-    let context = tapl::tapl::fullsimple::Context::new();
+    let context = fullsimple::Context::new();
     loop {
         print!("> ");
         io::stdout().flush().unwrap();

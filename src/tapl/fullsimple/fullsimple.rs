@@ -603,8 +603,8 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
             })
         }
         IsZero(ref t1) => {
-            type_of(c.clone(), t1).and_then(|t: Type| if equivalent(c.clone(), t, Type::Bool) {
-                Ok(Type::Nat)
+            type_of(c.clone(), t1).and_then(|t: Type| if equivalent(c.clone(), t, Type::Nat) {
+                Ok(Type::Bool)
             } else {
                 Err(ContextError::ParameterTypeMismatch)
             })
@@ -623,6 +623,15 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
     }
 }
 
+pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
+    match parser::parse_Term(s) {
+        Ok(t) => match type_of(ctx.clone(), &t) {
+            Ok(ty_t) => Ok(format!("{:?} : {:?}", eval(ctx.clone(), &t), ty_t)),
+            Err(e) => Err(RunError::ContextError(e)),
+        }
+        Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
+    }
+}
 
 #[cfg(test)]
 mod tests {

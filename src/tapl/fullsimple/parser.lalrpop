@@ -8,5 +8,7 @@ pub Term: Box<Term> = {
     "false" => Box::new(Term::False),
     "zero" => Box::new(Term::Zero),
     "succ(" <Term> ")" => Box::new(Term::Succ(<>)),
+    "pred(" <Term> ")" => Box::new(Term::Pred(<>)),
     "iszero(" <Term> ")" => Box::new(Term::IsZero(<>)),
+    "if" <Term> "then" <Term> "else" <Term> => Box::new(Term::If(<>)),
 };

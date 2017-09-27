@@ -11,9 +11,13 @@ mod __parse__Term {
     #[allow(dead_code)]
     pub enum __Symbol<'input> {
         Term_22_29_22(&'input str),
+        Term_22else_22(&'input str),
         Term_22false_22(&'input str),
+        Term_22if_22(&'input str),
         Term_22iszero_28_22(&'input str),
+        Term_22pred_28_22(&'input str),
         Term_22succ_28_22(&'input str),
+        Term_22then_22(&'input str),
         Term_22true_22(&'input str),
         Term_22zero_22(&'input str),
         NtTerm(Box<Term>),
@@ -21,40 +25,67 @@ mod __parse__Term {
     }
     const __ACTION: &'static [i32] = &[
         // State 0
-        0, 3, 4, 5, 6, 7,
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
         // State 1
-        -6, -6, -6, -6, -6, -6,
+        -8, -8, -8, -8, -8, -8, -8, -8, -8, -8,
         // State 2
-        -2, -2, -2, -2, -2, -2,
+        -2, -2, -2, -2, -2, -2, -2, -2, -2, -2,
         // State 3
-        0, 3, 4, 5, 6, 7,
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
         // State 4
-        0, 3, 4, 5, 6, 7,
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
         // State 5
-        -1, -1, -1, -1, -1, -1,
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
         // State 6
-        -3, -3, -3, -3, -3, -3,
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
         // State 7
-        10, 0, 0, 0, 0, 0,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         // State 8
-        11, 0, 0, 0, 0, 0,
+        -3, -3, -3, -3, -3, -3, -3, -3, -3, -3,
         // State 9
-        -5, -5, -5, -5, -5, -5,
+        0, 0, 0, 0, 0, 0, 0, 14, 0, 0,
         // State 10
-        -4, -4, -4, -4, -4, -4,
+        15, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        // State 11
+        16, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        // State 12
+        17, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        // State 13
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
+        // State 14
+        -6, -6, -6, -6, -6, -6, -6, -6, -6, -6,
+        // State 15
+        -5, -5, -5, -5, -5, -5, -5, -5, -5, -5,
+        // State 16
+        -4, -4, -4, -4, -4, -4, -4, -4, -4, -4,
+        // State 17
+        0, 19, 0, 0, 0, 0, 0, 0, 0, 0,
+        // State 18
+        0, 0, 3, 4, 5, 6, 7, 0, 8, 9,
+        // State 19
+        -7, -7, -7, -7, -7, -7, -7, -7, -7, -7,
     ];
     const __EOF_ACTION: &'static [i32] = &[
         0,
-        -6,
+        -8,
         -2,
+        0,
+        0,
         0,
         0,
         -1,
         -3,
         0,
         0,
+        0,
+        0,
+        0,
+        -6,
         -5,
         -4,
+        0,
+        0,
+        -7,
     ];
     const __GOTO: &'static [i32] = &[
         // State 0
@@ -64,13 +95,13 @@ mod __parse__Term {
         // State 2
         0, 0,
         // State 3
-        8, 0,
+        10, 0,
         // State 4
-        9, 0,
+        11, 0,
         // State 5
-        0, 0,
+        12, 0,
         // State 6
-        0, 0,
+        13, 0,
         // State 7
         0, 0,
         // State 8
@@ -79,17 +110,39 @@ mod __parse__Term {
         0, 0,
         // State 10
         0, 0,
+        // State 11
+        0, 0,
+        // State 12
+        0, 0,
+        // State 13
+        18, 0,
+        // State 14
+        0, 0,
+        // State 15
+        0, 0,
+        // State 16
+        0, 0,
+        // State 17
+        0, 0,
+        // State 18
+        20, 0,
+        // State 19
+        0, 0,
     ];
     fn __expected_tokens(__state: usize) -> Vec<::std::string::String> {
         const __TERMINAL: &'static [&'static str] = &[
             r###"")""###,
+            r###""else""###,
             r###""false""###,
+            r###""if""###,
             r###""iszero(""###,
+            r###""pred(""###,
             r###""succ(""###,
+            r###""then""###,
             r###""true""###,
             r###""zero""###,
         ];
-        __ACTION[(__state * 6)..].iter().zip(__TERMINAL).filter_map(|(&state, terminal)| {
+        __ACTION[(__state * 10)..].iter().zip(__TERMINAL).filter_map(|(&state, terminal)| {
             if state == 0 {
                 None
             } else {
@@ -123,6 +176,10 @@ mod __parse__Term {
                 (3, _) if true => 3,
                 (4, _) if true => 4,
                 (5, _) if true => 5,
+                (6, _) if true => 6,
+                (7, _) if true => 7,
+                (8, _) if true => 8,
+                (9, _) if true => 9,
                 _ => {
                     let __state = *__states.last().unwrap() as usize;
                     let __error = __lalrpop_util::ParseError::UnrecognizedToken {
@@ -134,7 +191,7 @@ mod __parse__Term {
             };
             '__inner: loop {
                 let __state = *__states.last().unwrap() as usize;
-                let __action = __ACTION[__state * 6 + __integer];
+                let __action = __ACTION[__state * 10 + __integer];
                 if __action > 0 {
                     let __symbol = match __integer {
                         0 => match __lookahead.1 {
@@ -142,23 +199,39 @@ mod __parse__Term {
                             _ => unreachable!(),
                         },
                         1 => match __lookahead.1 {
-                            (1, __tok0) => __Symbol::Term_22false_22((__tok0)),
+                            (1, __tok0) => __Symbol::Term_22else_22((__tok0)),
                             _ => unreachable!(),
                         },
                         2 => match __lookahead.1 {
-                            (2, __tok0) => __Symbol::Term_22iszero_28_22((__tok0)),
+                            (2, __tok0) => __Symbol::Term_22false_22((__tok0)),
                             _ => unreachable!(),
                         },
                         3 => match __lookahead.1 {
-                            (3, __tok0) => __Symbol::Term_22succ_28_22((__tok0)),
+                            (3, __tok0) => __Symbol::Term_22if_22((__tok0)),
                             _ => unreachable!(),
                         },
                         4 => match __lookahead.1 {
-                            (4, __tok0) => __Symbol::Term_22true_22((__tok0)),
+                            (4, __tok0) => __Symbol::Term_22iszero_28_22((__tok0)),
                             _ => unreachable!(),
                         },
                         5 => match __lookahead.1 {
-                            (5, __tok0) => __Symbol::Term_22zero_22((__tok0)),
+                            (5, __tok0) => __Symbol::Term_22pred_28_22((__tok0)),
+                            _ => unreachable!(),
+                        },
+                        6 => match __lookahead.1 {
+                            (6, __tok0) => __Symbol::Term_22succ_28_22((__tok0)),
+                            _ => unreachable!(),
+                        },
+                        7 => match __lookahead.1 {
+                            (7, __tok0) => __Symbol::Term_22then_22((__tok0)),
+                            _ => unreachable!(),
+                        },
+                        8 => match __lookahead.1 {
+                            (8, __tok0) => __Symbol::Term_22true_22((__tok0)),
+                            _ => unreachable!(),
+                        },
+                        9 => match __lookahead.1 {
+                            (9, __tok0) => __Symbol::Term_22zero_22((__tok0)),
                             _ => unreachable!(),
                         },
                         _ => unreachable!(),
@@ -256,10 +329,10 @@ mod __parse__Term {
                 0
             }
             5 => {
-                // Term = "iszero(", Term, ")" => ActionFn(5);
+                // Term = "pred(", Term, ")" => ActionFn(5);
                 let __sym2 = __pop_Term_22_29_22(__symbols);
                 let __sym1 = __pop_NtTerm(__symbols);
-                let __sym0 = __pop_Term_22iszero_28_22(__symbols);
+                let __sym0 = __pop_Term_22pred_28_22(__symbols);
                 let __start = __sym0.0.clone();
                 let __end = __sym2.2.clone();
                 let __nt = super::__action5::<>(input, __sym0, __sym1, __sym2);
@@ -269,6 +342,35 @@ mod __parse__Term {
                 0
             }
             6 => {
+                // Term = "iszero(", Term, ")" => ActionFn(6);
+                let __sym2 = __pop_Term_22_29_22(__symbols);
+                let __sym1 = __pop_NtTerm(__symbols);
+                let __sym0 = __pop_Term_22iszero_28_22(__symbols);
+                let __start = __sym0.0.clone();
+                let __end = __sym2.2.clone();
+                let __nt = super::__action6::<>(input, __sym0, __sym1, __sym2);
+                let __states_len = __states.len();
+                __states.truncate(__states_len - 3);
+                __symbols.push((__start, __Symbol::NtTerm(__nt), __end));
+                0
+            }
+            7 => {
+                // Term = "if", Term, "then", Term, "else", Term => ActionFn(7);
+                let __sym5 = __pop_NtTerm(__symbols);
+                let __sym4 = __pop_Term_22else_22(__symbols);
+                let __sym3 = __pop_NtTerm(__symbols);
+                let __sym2 = __pop_Term_22then_22(__symbols);
+                let __sym1 = __pop_NtTerm(__symbols);
+                let __sym0 = __pop_Term_22if_22(__symbols);
+                let __start = __sym0.0.clone();
+                let __end = __sym5.2.clone();
+                let __nt = super::__action7::<>(input, __sym0, __sym1, __sym2, __sym3, __sym4, __sym5);
+                let __states_len = __states.len();
+                __states.truncate(__states_len - 6);
+                __symbols.push((__start, __Symbol::NtTerm(__nt), __end));
+                0
+            }
+            8 => {
                 // __Term = Term => ActionFn(0);
                 let __sym0 = __pop_NtTerm(__symbols);
                 let __start = __sym0.0.clone();
@@ -293,6 +395,16 @@ mod __parse__Term {
             _ => panic!("symbol type mismatch")
         }
     }
+    fn __pop_Term_22else_22<
+      'input,
+    >(
+        __symbols: &mut ::std::vec::Vec<(usize,__Symbol<'input>,usize)>
+    ) -> (usize, &'input str, usize) {
+        match __symbols.pop().unwrap() {
+            (__l, __Symbol::Term_22else_22(__v), __r) => (__l, __v, __r),
+            _ => panic!("symbol type mismatch")
+        }
+    }
     fn __pop_Term_22false_22<
       'input,
     >(
@@ -300,6 +412,16 @@ mod __parse__Term {
     ) -> (usize, &'input str, usize) {
         match __symbols.pop().unwrap() {
             (__l, __Symbol::Term_22false_22(__v), __r) => (__l, __v, __r),
+            _ => panic!("symbol type mismatch")
+        }
+    }
+    fn __pop_Term_22if_22<
+      'input,
+    >(
+        __symbols: &mut ::std::vec::Vec<(usize,__Symbol<'input>,usize)>
+    ) -> (usize, &'input str, usize) {
+        match __symbols.pop().unwrap() {
+            (__l, __Symbol::Term_22if_22(__v), __r) => (__l, __v, __r),
             _ => panic!("symbol type mismatch")
         }
     }
@@ -313,6 +435,16 @@ mod __parse__Term {
             _ => panic!("symbol type mismatch")
         }
     }
+    fn __pop_Term_22pred_28_22<
+      'input,
+    >(
+        __symbols: &mut ::std::vec::Vec<(usize,__Symbol<'input>,usize)>
+    ) -> (usize, &'input str, usize) {
+        match __symbols.pop().unwrap() {
+            (__l, __Symbol::Term_22pred_28_22(__v), __r) => (__l, __v, __r),
+            _ => panic!("symbol type mismatch")
+        }
+    }
     fn __pop_Term_22succ_28_22<
       'input,
     >(
@@ -320,6 +452,16 @@ mod __parse__Term {
     ) -> (usize, &'input str, usize) {
         match __symbols.pop().unwrap() {
             (__l, __Symbol::Term_22succ_28_22(__v), __r) => (__l, __v, __r),
+            _ => panic!("symbol type mismatch")
+        }
+    }
+    fn __pop_Term_22then_22<
+      'input,
+    >(
+        __symbols: &mut ::std::vec::Vec<(usize,__Symbol<'input>,usize)>
+    ) -> (usize, &'input str, usize) {
+        match __symbols.pop().unwrap() {
+            (__l, __Symbol::Term_22then_22(__v), __r) => (__l, __v, __r),
             _ => panic!("symbol type mismatch")
         }
     }
@@ -382,18 +524,26 @@ mod __intern_token {
         pub fn new(s: &'input str) -> __Matcher<'input> {
             let __strs: &[&str] = &[
                 "^(?u:\\))",
+                "^(?u:else)",
                 "^(?u:false)",
+                "^(?u:if)",
                 "^(?u:iszero\\()",
+                "^(?u:pred\\()",
                 "^(?u:succ\\()",
+                "^(?u:then)",
                 "^(?u:true)",
                 "^(?u:zero)",
             ];
             let __regex_set = __regex::RegexSet::new(__strs).unwrap();
             let __regex_vec = vec![
                 __regex::Regex::new("^(?u:\\))").unwrap(),
+                __regex::Regex::new("^(?u:else)").unwrap(),
                 __regex::Regex::new("^(?u:false)").unwrap(),
+                __regex::Regex::new("^(?u:if)").unwrap(),
                 __regex::Regex::new("^(?u:iszero\\()").unwrap(),
+                __regex::Regex::new("^(?u:pred\\()").unwrap(),
                 __regex::Regex::new("^(?u:succ\\()").unwrap(),
+                __regex::Regex::new("^(?u:then)").unwrap(),
                 __regex::Regex::new("^(?u:true)").unwrap(),
                 __regex::Regex::new("^(?u:zero)").unwrap(),
             ];
@@ -426,7 +576,7 @@ mod __intern_token {
                 } else {
                     let mut __longest_match = 0;
                     let mut __index = 0;
-                    for __i in 0 .. 6 {
+                    for __i in 0 .. 10 {
                         if __matches.matched(__i) {
                             let __match = self.regex_vec[__i].find(__text).unwrap();
                             let __len = __match.end();
@@ -515,7 +665,36 @@ fn __action5<
     (_, _, _): (usize, &'input str, usize),
 ) -> Box<Term>
 {
+    Box::new(Term::Pred(__0))
+}
+
+#[allow(unused_variables)]
+fn __action6<
+    'input,
+>(
+    input: &'input str,
+    (_, _, _): (usize, &'input str, usize),
+    (_, __0, _): (usize, Box<Term>, usize),
+    (_, _, _): (usize, &'input str, usize),
+) -> Box<Term>
+{
     Box::new(Term::IsZero(__0))
+}
+
+#[allow(unused_variables)]
+fn __action7<
+    'input,
+>(
+    input: &'input str,
+    (_, _, _): (usize, &'input str, usize),
+    (_, __0, _): (usize, Box<Term>, usize),
+    (_, _, _): (usize, &'input str, usize),
+    (_, __1, _): (usize, Box<Term>, usize),
+    (_, _, _): (usize, &'input str, usize),
+    (_, __2, _): (usize, Box<Term>, usize),
+) -> Box<Term>
+{
+    Box::new(Term::If(__0, __1, __2))
 }
 
 pub trait __ToTriple<'input, > {
