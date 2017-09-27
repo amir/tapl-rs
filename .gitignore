@@ -1,3 +1,2 @@
 target/
 **/*.rs.bk
-src/tapl/fullsimple/parser.rs

@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use tapl::fullsimple::ast::{Term, Type};
 use tapl::fullsimple::fullsimple::{Command, Context, ContextTermResult, RunError};
 use tapl::fullsimple::fullsimple::{add_name, name_to_index};
