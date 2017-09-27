@@ -421,7 +421,7 @@ fn add_binding(ctx: Context, binding: &Binding) -> Context {
     newc
 }
 
-fn add_name(ctx: Context, name: String) -> Context {
+pub fn add_name(ctx: Context, name: String) -> Context {
     add_binding(
         ctx,
         &Binding {
@@ -451,7 +451,7 @@ fn index_to_name(ctx: Context, idx: usize) -> Result<Binding, ContextError> {
     }
 }
 
-fn name_to_index(ctx: Context, name: &str) -> Result<usize, ContextError> {
+pub fn name_to_index(ctx: Context, name: &str) -> Result<usize, ContextError> {
     match ctx.iter().position(|b| b.label == name) {
         Some(s) => Ok(s),
         None => Err(ContextError::UnboundIdentifier(name.to_string())),
@@ -478,6 +478,8 @@ pub enum RunError {
     ParseError(String),
     ContextError(ContextError),
 }
+
+pub type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
 
 fn is_type_abb(c: Context, i: usize) -> bool {
     match get_binding(c, i) {
@@ -624,12 +626,25 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
 }
 
 pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
-    match parser::parse_Term(s) {
+    match parser::parse_Term2(s) {
         Ok(t) => match type_of(ctx.clone(), &t) {
             Ok(ty_t) => Ok(format!("{:?} : {:?}", eval(ctx.clone(), &t), ty_t)),
             Err(e) => Err(RunError::ContextError(e)),
         }
         Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
+    }
+}
+
+#[cfg(test)]
+mod parser_tests {
+    use super::Context;
+    use tapl::fullsimple::parser;
+    use tapl::fullsimple::ast::Term;
+    use tapl::fullsimple::ast::Type;
+
+    #[test]
+    fn alaki() {
+        assert_eq!((parser::parse_Term("lambda x:Bool. x").ok().unwrap())(Context::new()), Ok(Term::Abs("x".to_string(), Type::Bool, Box::new(Term::Var(0, 1)))));
     }
 }
 

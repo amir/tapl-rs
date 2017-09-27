@@ -1,14 +1,52 @@
 use std::str::FromStr;
 use tapl::fullsimple::ast::{Term, Type};
+use tapl::fullsimple::fullsimple::{Command, Context, ContextTermResult, RunError};
+use tapl::fullsimple::fullsimple::{add_name, name_to_index};
 
 grammar;
 
-pub Term: Box<Term> = {
+pub Term2: Box<Term> = {
     "true" => Box::new(Term::True),
     "false" => Box::new(Term::False),
     "zero" => Box::new(Term::Zero),
-    "succ(" <Term> ")" => Box::new(Term::Succ(<>)),
-    "pred(" <Term> ")" => Box::new(Term::Pred(<>)),
-    "iszero(" <Term> ")" => Box::new(Term::IsZero(<>)),
-    "if" <Term> "then" <Term> "else" <Term> => Box::new(Term::If(<>)),
+    "succ(" <Term2> ")" => Box::new(Term::Succ(<>)),
+    "pred(" <Term2> ")" => Box::new(Term::Pred(<>)),
+    "iszero(" <Term2> ")" => Box::new(Term::IsZero(<>)),
+    "if" <Term2> "then" <Term2> "else" <Term2> => Box::new(Term::If(<>)),
+};
+
+pub Term: ContextTermResult = {
+    "lambda" <v:LCID> ":" <ty:Type> "." <t:Term> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        let nctx = add_name(ctx, v.clone());
+        t(nctx).and_then(|t2| Ok(Term::Abs(v.clone(), ty.clone(), Box::new(t2))))
+    }),
+    ATerm,
+};
+
+Type: Type = {
+    "Nat" => Type::Nat,
+    "Bool" => Type::Bool,
+};
+
+UCID: String = {
+    r"[A-Z][a-zA-Z]*" => String::from(<>),
+};
+
+LCID: String = {
+    r"[a-z][a-z]*" => String::from(<>),
+};
+
+ATerm: ContextTermResult = {
+    "true" => Box::new(move |_: Context| -> Result<Term, RunError> {
+        Ok(Term::True)
+    }),
+    "false" => Box::new(move |_: Context| -> Result<Term, RunError> {
+        Ok(Term::False)
+    }),
+    <v:LCID> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        match name_to_index(ctx.clone(), &v) {
+            Ok(i) => Ok(Term::Var(i, ctx.len())),
+            Err(e) => Err(RunError::ContextError(e)),
+        }
+    }),
 };
