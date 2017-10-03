@@ -627,9 +627,11 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
 
 pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
     match parser::parse_Term2(s) {
-        Ok(t) => match type_of(ctx.clone(), &t) {
-            Ok(ty_t) => Ok(format!("{:?} : {:?}", eval(ctx.clone(), &t), ty_t)),
-            Err(e) => Err(RunError::ContextError(e)),
+        Ok(t) => {
+            match type_of(ctx.clone(), &t) {
+                Ok(ty_t) => Ok(format!("{:?} : {:?}", eval(ctx.clone(), &t), ty_t)),
+                Err(e) => Err(RunError::ContextError(e)),
+            }
         }
         Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
     }
@@ -643,8 +645,30 @@ mod parser_tests {
     use tapl::fullsimple::ast::Type;
 
     #[test]
-    fn alaki() {
-        assert_eq!((parser::parse_Term("lambda x:Bool. x").ok().unwrap())(Context::new()), Ok(Term::Abs("x".to_string(), Type::Bool, Box::new(Term::Var(0, 1)))));
+    fn a_term() {
+        assert_eq!(
+            (parser::parse_Term("lambda x:Bool. x").ok().unwrap())(Context::new()),
+            Ok(Term::Abs(
+                "x".to_string(),
+                Type::Bool,
+                Box::new(Term::Var(0, 1)),
+            ))
+        );
+        assert_eq!(
+            (parser::parse_Term("true as Bool").ok().unwrap())(Context::new()),
+            Ok(Term::Ascribe(Box::new(Term::True), Type::Bool))
+        );
+        assert_eq!(
+            (parser::parse_Term("(true; false)").ok().unwrap())(Context::new()),
+            Ok(Term::App(
+                Box::new(Term::Abs(
+                    "_".to_string(),
+                    Type::Unit,
+                    Box::new(Term::False),
+                )),
+                Box::new(Term::True),
+            ))
+        );
     }
 }
 

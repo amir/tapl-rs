@@ -15,11 +15,11 @@ pub Term2: Box<Term> = {
 };
 
 pub Term: ContextTermResult = {
+    AppTerm,
     "lambda" <v:LCID> ":" <ty:Type> "." <t:Term> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
         let nctx = add_name(ctx, v.clone());
         t(nctx).and_then(|t2| Ok(Term::Abs(v.clone(), ty.clone(), Box::new(t2))))
     }),
-    ATerm,
 };
 
 Type: Type = {
@@ -35,7 +35,37 @@ LCID: String = {
     r"[a-z][a-z]*" => String::from(<>),
 };
 
+AppTerm: ContextTermResult = {
+    PathTerm,
+};
+
+PathTerm: ContextTermResult = {
+    AscribeTerm,
+};
+
+AscribeTerm: ContextTermResult = {
+    <t:ATerm> "as" <ty:Type> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|t2| Ok(Term::Ascribe(Box::new(t2), ty.clone())))
+    }),
+    ATerm,
+};
+
+TermSeq: ContextTermResult = {
+    Term,
+    <t1:Term> ";" <ts:TermSeq> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        let u = String::from("_");
+
+        t1(ctx.clone()).and_then(|et1| {
+            let nctx = add_name(ctx.clone(), u.clone());
+            ts(nctx).and_then(|ets| {
+                Ok(Term::App(Box::new(Term::Abs(u, Type::Unit, Box::new(ets))), Box::new(et1)))
+            })
+        })
+    }),
+};
+
 ATerm: ContextTermResult = {
+    "(" <ts:TermSeq> ")" => ts,
     "true" => Box::new(move |_: Context| -> Result<Term, RunError> {
         Ok(Term::True)
     }),
