@@ -669,6 +669,10 @@ mod parser_tests {
                 Box::new(Term::True),
             ))
         );
+        assert_eq!(
+            (parser::parse_Term("2").ok().unwrap())(Context::new()),
+            Ok(Term::Succ(Box::new(Term::Succ(Box::new(Term::Zero)))))
+        );
     }
 }
 

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use tapl::fullsimple::ast::{Term, Type};
 use tapl::fullsimple::fullsimple::{Command, Context, ContextTermResult, RunError};
 use tapl::fullsimple::fullsimple::{add_name, name_to_index};
@@ -27,19 +29,17 @@ Type: Type = {
     "Bool" => Type::Bool,
 };
 
-UCID: String = {
-    r"[A-Z][a-zA-Z]*" => String::from(<>),
-};
-
-LCID: String = {
-    r"[a-z][a-z]*" => String::from(<>),
-};
-
 AppTerm: ContextTermResult = {
     PathTerm,
 };
 
 PathTerm: ContextTermResult = {
+    <t:PathTerm> "." <v:LCID> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|t2| Ok(Term::Projection(Box::new(t2), v.clone())))
+    }),
+    <t:PathTerm> "." <i:INTV> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|t2| Ok(Term::Projection(Box::new(t2), i.to_string())))
+    }),
     AscribeTerm,
 };
 
@@ -78,4 +78,25 @@ ATerm: ContextTermResult = {
             Err(e) => Err(RunError::ContextError(e)),
         }
     }),
+    <i:INTV> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        fn f(n: i32) -> Term {
+            match n {
+                0 => Term::Zero,
+                n => Term::Succ(Box::new(f(n-1))),
+            }
+        }
+        Ok(f(i))
+    }),
+};
+
+UCID: String = {
+    r"[A-Z][a-zA-Z]*" => String::from(<>),
+};
+
+LCID: String = {
+    r"[a-z][a-z]*" => String::from(<>),
+};
+
+INTV: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap()
 };
