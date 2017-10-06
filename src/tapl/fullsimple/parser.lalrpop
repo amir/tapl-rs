@@ -1,36 +1,124 @@
 use std::str::FromStr;
 
 use tapl::fullsimple::ast::{Term, Type};
-use tapl::fullsimple::fullsimple::{Command, Context, ContextTermResult, RunError};
-use tapl::fullsimple::fullsimple::{add_name, name_to_index};
+use tapl::fullsimple::fullsimple::{Command, Context};
+use tapl::fullsimple::fullsimple::{Binding, BindingType};
+use tapl::fullsimple::fullsimple::{ContextError, RunError};
+use tapl::fullsimple::fullsimple::{ContextTermResult, ContextTypeResult};
+use tapl::fullsimple::fullsimple::{add_name, is_name_bound, name_to_index};
 
 grammar;
 
-pub Term2: Box<Term> = {
-    "true" => Box::new(Term::True),
-    "false" => Box::new(Term::False),
-    "zero" => Box::new(Term::Zero),
-    "succ(" <Term2> ")" => Box::new(Term::Succ(<>)),
-    "pred(" <Term2> ")" => Box::new(Term::Pred(<>)),
-    "iszero(" <Term2> ")" => Box::new(Term::IsZero(<>)),
-    "if" <Term2> "then" <Term2> "else" <Term2> => Box::new(Term::If(<>)),
-};
-
 pub Term: ContextTermResult = {
     AppTerm,
+    "if" <t1:Term> "then" <t2:Term> "else" <t3:Term> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t1(ctx.clone()).and_then(|v1| {
+            t2(ctx.clone()).and_then(|v2| {
+                t2(ctx).and_then(|v3| {
+                    Ok(Term::If(Box::new(v1), Box::new(v2), Box::new(v3)))
+                })
+            })
+        })
+    }),
     "lambda" <v:LCID> ":" <ty:Type> "." <t:Term> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
-        let nctx = add_name(ctx, v.clone());
-        t(nctx).and_then(|t2| Ok(Term::Abs(v.clone(), ty.clone(), Box::new(t2))))
+        let nctx = add_name(ctx.clone(), v.clone());
+        t(nctx).and_then(|t2| {
+            match ty(ctx) {
+                Ok(ty1) => Ok(Term::Abs(v.clone(), ty1, Box::new(t2))),
+                Err(e) => Err(RunError::ContextError(e)),
+            }
+        })
+    }),
+    "let" <n:LCID> "=" <t1:Term> "in" <t2:Term> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        let nctx = add_name(ctx.clone(), n.clone());
+        t1(ctx).and_then(|v1| {
+            t2(nctx).and_then(|v2| {
+                Ok(Term::Let(n.clone(), Box::new(v1), Box::new(v2)))
+            })
+        })
     }),
 };
 
-Type: Type = {
-    "Nat" => Type::Nat,
-    "Bool" => Type::Bool,
+Type: ContextTypeResult = {
+    ArrowType,
+};
+
+ArrowType: ContextTypeResult = {
+    <t1:AType> "->" <t2:ArrowType> => Box::new(move |ctx: Context| -> Result<Type, ContextError> {
+        t1(ctx.clone()).and_then(|v1| {
+            t2(ctx.clone()).and_then(|v2| {
+                Ok(Type::Arrow(Box::new(v1), Box::new(v2)))
+            })
+        })
+    }),
+    AType,
+};
+
+AType: ContextTypeResult = {
+    "(" <t:Type> ")" => t,
+    <u:UCID> => Box::new(move |ctx: Context| -> Result<Type, ContextError> {
+        let b = Binding{label: u.clone(), binding: BindingType::NameBind};
+        if is_name_bound(ctx.clone(), &b) {
+            name_to_index(ctx.clone(), u.clone().as_str()).and_then(|i| {
+                Ok(Type::Var(i, ctx.len()))
+            })
+        } else {
+            Ok(Type::Id(u.clone()))
+        }
+    }),
+    "Bool" => Box::new(move |_: Context| -> Result<Type, ContextError> {
+        Ok(Type::Bool)
+    }),
+    "String" => Box::new(move |_: Context| -> Result<Type, ContextError> {
+        Ok(Type::Str)
+    }),
+    "Unit" => Box::new(move |_: Context| -> Result<Type, ContextError> {
+        Ok(Type::Unit)
+    }),
+    "Float" => Box::new(move |_: Context| -> Result<Type, ContextError> {
+        Ok(Type::Float)
+    }),
+    "Nat" => Box::new(move |_: Context| -> Result<Type, ContextError> {
+        Ok(Type::Nat)
+    }),
 };
 
 AppTerm: ContextTermResult = {
     PathTerm,
+    <e1:AppTerm> <e2:PathTerm> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        e1(ctx.clone()).and_then(|e1v| {
+            e2(ctx).and_then(|e2v| {
+                Ok(Term::App(Box::new(e1v), Box::new(e2v)))
+            })
+        })
+    }),
+    "fix" <t:PathTerm> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|t2| {
+            Ok(Term::Fix(Box::new(t2)))
+        })
+    }),
+    "timesfloat" <t1:PathTerm> <t2:PathTerm> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t1(ctx.clone()).and_then(|v1| {
+            t2(ctx).and_then(|v2| {
+                Ok(Term::TimesFloat(Box::new(v1), Box::new(v2)))
+            })
+        })
+    }),
+    "succ" <t:PathTerm> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|v| {
+            Ok(Term::Succ(Box::new(v)))
+        })
+    }),
+    "pred" <t:PathTerm> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|v| {
+            Ok(Term::Pred(Box::new(v)))
+        })
+    }),
+    "iszero" <t:PathTerm> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx).and_then(|v| {
+            Ok(Term::IsZero(Box::new(v)))
+        })
+    }),
 };
 
 PathTerm: ContextTermResult = {
@@ -45,7 +133,12 @@ PathTerm: ContextTermResult = {
 
 AscribeTerm: ContextTermResult = {
     <t:ATerm> "as" <ty:Type> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
-        t(ctx).and_then(|t2| Ok(Term::Ascribe(Box::new(t2), ty.clone())))
+        t(ctx.clone()).and_then(|t2| {
+            match ty(ctx) {
+                Ok(ty1) => Ok(Term::Ascribe(Box::new(t2), ty1)),
+                Err(e) => Err(RunError::ContextError(e)),
+            }
+         })
     }),
     ATerm,
 };
@@ -66,17 +159,37 @@ TermSeq: ContextTermResult = {
 
 ATerm: ContextTermResult = {
     "(" <ts:TermSeq> ")" => ts,
+    "inert" "[" <t:Type> "]" => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        match t(ctx) {
+            Ok(t1) => Ok(Term::Inert(t1)),
+            Err(e) => Err(RunError::ContextError(e)),
+        }
+    }),
     "true" => Box::new(move |_: Context| -> Result<Term, RunError> {
         Ok(Term::True)
     }),
     "false" => Box::new(move |_: Context| -> Result<Term, RunError> {
         Ok(Term::False)
     }),
+    "<" <v:LCID> "=" <t:Term> ">" "as" <ty:Type> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
+        t(ctx.clone()).and_then(|t1| {
+            match ty(ctx) {
+                Ok(ty1) => Ok(Term::Tag(v.clone(), Box::new(t1), ty1)),
+                Err(e) => Err(RunError::ContextError(e)),
+            }
+        })
+    }),
     <v:LCID> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
         match name_to_index(ctx.clone(), &v) {
             Ok(i) => Ok(Term::Var(i, ctx.len())),
             Err(e) => Err(RunError::ContextError(e)),
         }
+    }),
+    "unit" => Box::new(move |_: Context| -> Result<Term, RunError> {
+        Ok(Term::Unit)
+    }),
+    <f:FLOATV> => Box::new(move |_: Context| -> Result<Term, RunError> {
+        Ok(Term::Float(f))
     }),
     <i:INTV> => Box::new(move |ctx: Context| -> Result<Term, RunError> {
         fn f(n: i32) -> Term {
@@ -99,4 +212,8 @@ LCID: String = {
 
 INTV: i32 = {
     r"[0-9]+" => i32::from_str(<>).unwrap()
+};
+
+FLOATV: f32 = {
+    r"[0-9]*\.[0-9]+" => f32::from_str(<>).unwrap()
 };

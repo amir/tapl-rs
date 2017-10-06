@@ -18,8 +18,8 @@ pub enum Command {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Binding {
-    label: String,
-    binding: BindingType,
+    pub label: String,
+    pub binding: BindingType,
 }
 
 pub enum EvalError {
@@ -410,7 +410,7 @@ pub enum ContextError {
     NoRecordedType(usize),
 }
 
-fn is_name_bound(ctx: Context, binding: &Binding) -> bool {
+pub fn is_name_bound(ctx: Context, binding: &Binding) -> bool {
     ctx.iter().position(|b| b == binding).is_some()
 }
 
@@ -480,6 +480,7 @@ pub enum RunError {
 }
 
 pub type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
+pub type ContextTypeResult = Box<Fn(Context) -> Result<Type, ContextError>>;
 
 fn is_type_abb(c: Context, i: usize) -> bool {
     match get_binding(c, i) {
@@ -626,12 +627,15 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
 }
 
 pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
-    match parser::parse_Term2(s) {
+    match parser::parse_Term(s) {
         Ok(t) => {
-            match type_of(ctx.clone(), &t) {
-                Ok(ty_t) => Ok(format!("{:?} : {:?}", eval(ctx.clone(), &t), ty_t)),
-                Err(e) => Err(RunError::ContextError(e)),
-            }
+            t(ctx.clone()).and_then(|v| {
+                let ev = eval(ctx.clone(), &v);
+                match type_of(ctx, &ev) {
+                    Ok(ty_t) => Ok(format!("{:?} : {:?}", ev, ty_t)),
+                    Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
+                }
+            })
         }
         Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
     }
@@ -672,6 +676,13 @@ mod parser_tests {
         assert_eq!(
             (parser::parse_Term("2").ok().unwrap())(Context::new()),
             Ok(Term::Succ(Box::new(Term::Succ(Box::new(Term::Zero)))))
+        );
+        assert_eq!(
+            (parser::parse_Term("timesfloat 11.1 12.2").ok().unwrap())(Context::new()),
+            Ok(Term::TimesFloat(
+                Box::new(Term::Float(11.1)),
+                Box::new(Term::Float(12.2)),
+            ))
         );
     }
 }
