@@ -567,17 +567,22 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
             })
         }
         App(ref t1, ref t2) => {
-            type_of(c.clone(), t1).and_then(|_: Type| {
-                type_of(c.clone(), t2).and_then(|ty_t2: Type| match ty_t2 {
-                    Type::Arrow(_, ref ty_t12) => {
-                        if ty_t2 == *ty_t12.clone() {
-                            Ok(*ty_t12.clone())
-                        } else {
-                            Err(ContextError::ParameterTypeMismatch)
+            type_of(c.clone(), t1).and_then(|ty_t1: Type| {
+                type_of(c.clone(), t2).and_then(
+                    |ty_t2: Type| match simplify_type(
+                        c.clone(),
+                        ty_t1,
+                    ) {
+                        Type::Arrow(ref ty_t11, ref ty_t12) => {
+                            if equivalent(c.clone(), ty_t2.clone(), *ty_t11.clone()) {
+                                Ok(*ty_t12.clone())
+                            } else {
+                                Err(ContextError::ParameterTypeMismatch)
+                            }
                         }
-                    }
-                    _ => Err(ContextError::ArrowExpected),
-                })
+                        _ => Err(ContextError::ArrowExpected),
+                    },
+                )
             })
         }
         If(ref t1, ref t2, ref t3) => {
@@ -630,19 +635,18 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
 
 pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
     match parser::parse_Term(s) {
-        Ok(t) => {
-            t(ctx.clone()).and_then(|v| {
-                let ev = eval(ctx.clone(), &v);
-                match type_of(ctx.clone(), &ev) {
-                    Ok(ty_t) => {
-                        let ct = ContextTerm {
-                            context: &ctx,
-                            term: &ev,
-                        };
-                        Ok(format!("{} : {}", ct, ty_t))
-                    }
-                    Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
+        Ok(ast) => {
+            ast(ctx.clone()).and_then(|t| match type_of(ctx.clone(), &t) {
+                Ok(ty_t) => {
+                    let ev = eval(ctx.clone(), &t);
+                    let ct = ContextTerm {
+                        context: &ctx,
+                        term: &ev,
+                    };
+                    Ok(format!("{}: {}", ct, ty_t))
+
                 }
+                Err(e) => Err(RunError::ContextError(e)),
             })
         }
         Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
@@ -750,6 +754,17 @@ impl<'a> fmt::Display for ContextTerm<'a> {
             Term::True => write!(f, "true"),
             Term::False => write!(f, "false"),
             Term::Zero => write!(f, "zero"),
+            Term::Succ(ref t0) => {
+                fn go(n: u32, t: &Term, f: &mut fmt::Formatter) -> fmt::Result {
+                    match *t {
+                        Term::Zero => write!(f, "{}", n),
+                        Term::Succ(ref s) => go(n + 1, s, f),
+                        _ => write!(f, "(succ {})", t),
+                    }
+                }
+                go(1, t0, f)
+            }
+
             ref otherwise => write!(f, "{:?}", otherwise),
         }
     }
