@@ -1,13 +1,58 @@
 use std::str::FromStr;
 
-use tapl::fullsimple::ast::{Term, Type};
-use tapl::fullsimple::fullsimple::{Command, Context};
-use tapl::fullsimple::fullsimple::{Binding, BindingType};
-use tapl::fullsimple::fullsimple::{ContextError, RunError};
-use tapl::fullsimple::fullsimple::{ContextTermResult, ContextTypeResult};
+use tapl::fullsimple::ast::{Binding, BindingType, Command, Term, Type};
+use tapl::fullsimple::fullsimple::{Context, ContextError, RunError};
+use tapl::fullsimple::fullsimple::{ContextBindingType, ContextCommand, ContextTermResult, ContextTypeResult};
 use tapl::fullsimple::fullsimple::{add_name, is_name_bound, name_to_index};
 
 grammar;
+
+pub Command: ContextCommand = {
+    <t:Term> => Box::new(move |ctx: Context| -> Result<(Command, Context), RunError> {
+        t(ctx.clone()).and_then(|t1| {
+            Ok((Command::Eval(t1), ctx))
+        })
+    }),
+    <u:UCID> <t:TypeBinder> => Box::new(move |ctx: Context| -> Result<(Command, Context), RunError> {
+        let nctx = add_name(ctx.clone(), u.clone());
+        match t(ctx) {
+            Ok(tt) => Ok((Command::Bind(Binding{ label: u.clone(), binding: tt}), nctx)), 
+            Err(e) => Err(RunError::ContextError(e)),
+        }
+    }),
+    <l:LCID> <b:Binder> => Box::new(move |ctx: Context| -> Result<(Command, Context), RunError> {
+        let nctx = add_name(ctx.clone(), l.clone());
+        match b(ctx) {
+            Ok(tt) => Ok((Command::Bind(Binding{ label: l.clone(), binding: tt}), nctx)), 
+            Err(e) => Err(RunError::ContextError(e)),
+        }
+    }),
+};
+
+Binder: ContextBindingType = {
+    ":" <t:Type> => Box::new(move |ctx: Context| -> Result<BindingType, ContextError> {
+        t(ctx).and_then(|tt| {
+            Ok(BindingType::VarBind(tt))
+        })
+    }),
+    "=" <t:Term> => Box::new(move |ctx: Context| -> Result<BindingType, ContextError> {
+        match t(ctx) {
+            Ok(tt) => Ok(BindingType::TermAbbBind(tt, None)),
+            Err(e) => Err(ContextError::WrongBindingForVariable),
+        }
+    }),
+};
+
+TypeBinder: ContextBindingType = {
+    "" => Box::new(move |_: Context| -> Result<BindingType, ContextError> {
+        Ok(BindingType::TypeVarBind)
+    }),
+    "=" <t:Type> => Box::new(move |ctx: Context| -> Result<BindingType, ContextError> {
+        t(ctx).and_then(|tt| {
+            Ok(BindingType::TypeAbbBind(tt))
+        })
+    }),
+};
 
 pub Term: ContextTermResult = {
     AppTerm,

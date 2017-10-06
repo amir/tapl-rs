@@ -37,3 +37,24 @@ pub enum Term {
     IsZero(Box<Term>),
     Inert(Type),
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BindingType {
+    NameBind,
+    TypeVarBind,
+    VarBind(Type),
+    TermAbbBind(Term, Option<Type>),
+    TypeAbbBind(Type),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Command {
+    Eval(Term),
+    Bind(Binding),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Binding {
+    pub label: String,
+    pub binding: BindingType,
+}

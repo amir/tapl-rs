@@ -1,28 +1,7 @@
 use std::fmt;
 
-use tapl::fullsimple::ast::{Term, Type};
+use tapl::fullsimple::ast::{Binding, BindingType, Command, Term, Type};
 use tapl::fullsimple::parser;
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum BindingType {
-    NameBind,
-    TypeVarBind,
-    VarBind(Type),
-    TermAbbBind(Term, Option<Type>),
-    TypeAbbBind(Type),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Command {
-    Eval(Term),
-    Bind(Binding),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Binding {
-    pub label: String,
-    pub binding: BindingType,
-}
 
 pub enum EvalError {
     NoRuleApplies(Term),
@@ -481,8 +460,10 @@ pub enum RunError {
     ContextError(ContextError),
 }
 
+pub type ContextCommand = Box<Fn(Context) -> Result<(Command, Context), RunError>>;
 pub type ContextTermResult = Box<Fn(Context) -> Result<Term, RunError>>;
 pub type ContextTypeResult = Box<Fn(Context) -> Result<Type, ContextError>>;
+pub type ContextBindingType = Box<Fn(Context) -> Result<BindingType, ContextError>>;
 
 fn is_type_abb(c: Context, i: usize) -> bool {
     match get_binding(c, i) {
@@ -633,20 +614,29 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
     }
 }
 
-pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
-    match parser::parse_Term(s) {
+pub fn repl(s: &str, ctx: Context) -> Result<(String, Context), RunError> {
+    println!("Context: {:?}", ctx);
+    match parser::parse_Command(s) {
         Ok(ast) => {
-            ast(ctx.clone()).and_then(|t| match type_of(ctx.clone(), &t) {
-                Ok(ty_t) => {
-                    let ev = eval(ctx.clone(), &t);
-                    let ct = ContextTerm {
-                        context: &ctx,
-                        term: &ev,
-                    };
-                    Ok(format!("{}: {}", ct, ty_t))
-
+            ast(ctx.clone()).and_then(|c| match c {
+                (Command::Eval(t), nctx) => {
+                    match type_of(nctx.clone(), &t) {
+                        Ok(ty_t) => {
+                            let ev = eval(nctx.clone(), &t);
+                            let ct = ContextTerm {
+                                context: &nctx.clone(),
+                                term: &ev,
+                            };
+                            let cty = ContextType {
+                                context: &nctx.clone(),
+                                typ: &ty_t,
+                            };
+                            Ok((format!("{}: {}", ct, cty), nctx))
+                        }
+                        Err(e) => Err(RunError::ContextError(e)),
+                    }
                 }
-                Err(e) => Err(RunError::ContextError(e)),
+                (Command::Bind(b), nctx) => Ok((format!("{}", b), nctx)),
             })
         }
         Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
@@ -704,6 +694,11 @@ struct ContextTerm<'a> {
     term: &'a Term,
 }
 
+struct ContextType<'a> {
+    context: &'a Context,
+    typ: &'a Type,
+}
+
 impl fmt::Display for Binding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.label)
@@ -729,7 +724,10 @@ impl<'a> fmt::Display for ContextTerm<'a> {
                     f,
                     "(lambda {}:{}. {})",
                     b1,
-                    ty_t1,
+                    ContextType {
+                        context: &ctx1.clone(),
+                        typ: ty_t1,
+                    },
                     ContextTerm {
                         context: &ctx1,
                         term: t1,
@@ -783,16 +781,35 @@ impl fmt::Display for Term {
     }
 }
 
-impl fmt::Display for Type {
+impl<'a> fmt::Display for ContextType<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match *self.typ {
             Type::Nat => write!(f, "Nat"),
             Type::Bool => write!(f, "Bool"),
             Type::Unit => write!(f, "Unit"),
             Type::Str => write!(f, "String"),
             Type::Float => write!(f, "Float"),
             Type::Id(ref a) => write!(f, "{}", a),
-            Type::Arrow(ref t1, ref t2) => write!(f, "{}->{}", t1, t2),
+            Type::Arrow(ref t1, ref t2) => {
+                write!(
+                    f,
+                    "{}->{}",
+                    ContextType {
+                        typ: t1,
+                        context: &self.context.clone(),
+                    },
+                    ContextType {
+                        typ: t2,
+                        context: &self.context.clone(),
+                    }
+                )
+            }
+            Type::Var(x, _) => {
+                match index_to_name(self.context.clone(), x) {
+                    Ok(n) => write!(f, "{}", n),
+                    Err(e) => write!(f, "{:?}", e),
+                }
+            }
             ref otherwise => write!(f, "{:?}", otherwise),
         }
     }
