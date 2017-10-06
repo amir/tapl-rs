@@ -2107,7 +2107,7 @@ fn __action9<
     (_, u, _): (usize, String, usize),
 ) -> ContextTypeResult
 {
-    Box::new(move |ctx: Context| -> Result<Type, ContextError> { 
+    Box::new(move |ctx: Context| -> Result<Type, ContextError> {
         let b = Binding{label: u.clone(), binding: BindingType::NameBind};
         if is_name_bound(ctx.clone(), &b) {
             name_to_index(ctx.clone(), u.clone().as_str()).and_then(|i| {

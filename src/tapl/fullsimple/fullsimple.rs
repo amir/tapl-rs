@@ -1,3 +1,5 @@
+use std::fmt;
+
 use tapl::fullsimple::ast::{Term, Type};
 use tapl::fullsimple::parser;
 
@@ -631,8 +633,14 @@ pub fn repl(s: &str, ctx: Context) -> Result<String, RunError> {
         Ok(t) => {
             t(ctx.clone()).and_then(|v| {
                 let ev = eval(ctx.clone(), &v);
-                match type_of(ctx, &ev) {
-                    Ok(ty_t) => Ok(format!("{:?} : {:?}", ev, ty_t)),
+                match type_of(ctx.clone(), &ev) {
+                    Ok(ty_t) => {
+                        let ct = ContextTerm {
+                            context: &ctx,
+                            term: &ev,
+                        };
+                        Ok(format!("{} : {}", ct, ty_t))
+                    }
                     Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
                 }
             })
@@ -684,6 +692,94 @@ mod parser_tests {
                 Box::new(Term::Float(12.2)),
             ))
         );
+    }
+}
+
+struct ContextTerm<'a> {
+    context: &'a Context,
+    term: &'a Term,
+}
+
+impl fmt::Display for Binding {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.label)
+    }
+}
+
+impl<'a> fmt::Display for ContextTerm<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self.term {
+            Term::Var(x, _) => {
+                match index_to_name(self.context.clone(), x) {
+                    Ok(n) => write!(f, "{}", n),
+                    Err(e) => write!(f, "{:?}", e),
+                }
+            }
+            Term::Abs(ref x, ref ty_t1, ref t1) => {
+                let b = Binding {
+                    label: x.clone(),
+                    binding: BindingType::VarBind((*ty_t1).clone()),
+                };
+                let (ctx1, b1) = pick_fresh_name(self.context.clone(), &b);
+                write!(
+                    f,
+                    "(lambda {}:{}. {})",
+                    b1,
+                    ty_t1,
+                    ContextTerm {
+                        context: &ctx1,
+                        term: t1,
+                    }
+                )
+            }
+            Term::App(ref t1, ref t2) => {
+                write!(
+                    f,
+                    "({} {})",
+                    ContextTerm {
+                        context: self.context,
+                        term: t1,
+                    },
+                    ContextTerm {
+                        context: self.context,
+                        term: t2,
+                    }
+                )
+            }
+            Term::If(ref t0, ref t1, ref t2) => write!(f, "if {} then {} else {}", t0, t1, t2),
+            Term::True => write!(f, "true"),
+            Term::False => write!(f, "false"),
+            Term::Zero => write!(f, "zero"),
+            ref otherwise => write!(f, "{:?}", otherwise),
+        }
+    }
+}
+
+impl fmt::Display for Term {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            ContextTerm {
+                context: &Context::new(),
+                term: self,
+            }
+        )
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Type::Nat => write!(f, "Nat"),
+            Type::Bool => write!(f, "Bool"),
+            Type::Unit => write!(f, "Unit"),
+            Type::Str => write!(f, "String"),
+            Type::Float => write!(f, "Float"),
+            Type::Id(ref a) => write!(f, "{}", a),
+            Type::Arrow(ref t1, ref t2) => write!(f, "{}->{}", t1, t2),
+            ref otherwise => write!(f, "{:?}", otherwise),
+        }
     }
 }
 
