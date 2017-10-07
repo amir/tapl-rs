@@ -20,6 +20,7 @@ $ rustup run nightly cargo run --bin fulluntyped
 
 ## tyarith
 ```
+$ rustup run nightly cargo run --bin tyarith
 > if true then zero else false
 TypeError("arms of conditional have different types")
 > (succ false)
@@ -34,6 +35,7 @@ TypeError("guard of conditional not a boolean")
 
 ## simplebool
 ```
+$ rustup run nightly cargo run --bin simplebool
 > (lambda x:Bool. x)
 (lambda x:Bool. x) : Bool->Bool
 > (lambda x:Bool->Bool. x)
@@ -41,3 +43,12 @@ TypeError("guard of conditional not a boolean")
 > ((lambda x:Bool->Bool. x) (lambda y:Bool. y))
 (lambda y:Bool. y) : Bool->Bool
 ```
+
+## fullsimple
+$ rustup run nightly cargo run --bin fullsimple
+> T=Nat;
+T
+> (lambda i:T. succ i) 12
+13: Nat
+> (lambda x:Bool->Bool. if x false then true else false)(lambda x:Bool. if x then false else true)
+true: Bool
