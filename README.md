@@ -45,6 +45,7 @@ $ rustup run nightly cargo run --bin simplebool
 ```
 
 ## fullsimple
+```
 $ rustup run nightly cargo run --bin fullsimple
 > T=Nat;
 T
@@ -52,3 +53,4 @@ T
 13: Nat
 > (lambda x:Bool->Bool. if x false then true else false)(lambda x:Bool. if x then false else true)
 true: Bool
+```
