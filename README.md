@@ -56,3 +56,5 @@ true: Bool
 > (lambda x:Bool. x) 11
 ContextError(ParameterTypeMismatch)
 ```
+
+Inspired by https://github.com/hayatoito/tapl-in-rust
