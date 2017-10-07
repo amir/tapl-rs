@@ -53,4 +53,6 @@ T
 13: Nat
 > (lambda x:Bool->Bool. if x false then true else false)(lambda x:Bool. if x then false else true)
 true: Bool
+> (lambda x:Bool. x) 11
+ContextError(ParameterTypeMismatch)
 ```
