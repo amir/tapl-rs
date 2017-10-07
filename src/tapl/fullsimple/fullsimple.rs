@@ -389,6 +389,7 @@ pub enum ContextError {
     UnexpectedBodyType,
     UnboundIdentifier(String),
     NoRecordedType(usize),
+    MismatchBindingType,
 }
 
 pub fn is_name_bound(ctx: Context, binding: &Binding) -> bool {
@@ -614,8 +615,37 @@ pub fn type_of(c: Context, t: &Term) -> Result<Type, ContextError> {
     }
 }
 
+fn eval_binding(binding: &BindingType, ctx: &Context) -> Result<BindingType, ContextError> {
+    match *binding {
+        BindingType::TermAbbBind(ref t, ref ty_t) => {
+            let tt = eval(ctx.clone(), &t);
+            Ok(BindingType::TermAbbBind(tt, ty_t.clone()))
+        }
+        ref bind => Ok(bind.clone()),
+    }
+}
+fn check_binding(binding: &BindingType, ctx: &Context) -> Result<BindingType, ContextError> {
+    use self::BindingType::*;
+
+    match *binding {
+        NameBind => Ok(NameBind),
+        VarBind(ref t) => Ok(VarBind(t.clone())),
+        TermAbbBind(ref t, None) => {
+            type_of(ctx.clone(), &t).and_then(|tt| Ok(TermAbbBind(t.clone(), Some(tt))))
+        }
+        TermAbbBind(ref t, Some(ref ty_t)) => {
+            type_of(ctx.clone(), &t).and_then(|tt| if equivalent(ctx.clone(), tt, ty_t.clone()) {
+                Ok(TermAbbBind(t.clone(), Some(ty_t.clone())))
+            } else {
+                Err(ContextError::MismatchBindingType)
+            })
+        }
+        TypeVarBind => Ok(TypeVarBind),
+        TypeAbbBind(ref t) => Ok(TypeAbbBind(t.clone())),
+    }
+}
+
 pub fn repl(s: &str, ctx: Context) -> Result<(String, Context), RunError> {
-    println!("Context: {:?}", ctx);
     match parser::parse_Command(s) {
         Ok(ast) => {
             ast(ctx.clone()).and_then(|c| match c {
@@ -636,7 +666,26 @@ pub fn repl(s: &str, ctx: Context) -> Result<(String, Context), RunError> {
                         Err(e) => Err(RunError::ContextError(e)),
                     }
                 }
-                (Command::Bind(b), nctx) => Ok((format!("{}", b), nctx)),
+                (Command::Bind(b), nctx) => {
+                    match check_binding(&b.binding, &nctx.clone()) {
+                        Ok(binding) => {
+                            match eval_binding(&binding, &nctx.clone()) {
+                                Ok(binding) => {
+                                    let ctxwb = add_binding(
+                                        nctx,
+                                        &Binding {
+                                            label: b.label.clone(),
+                                            binding: binding,
+                                        },
+                                    );
+                                    Ok((format!("{}", b), ctxwb))
+                                }
+                                Err(e) => Err(RunError::ContextError(e)),
+                            }
+                        }
+                        Err(e) => Err(RunError::ContextError(e)),
+                    }
+                }
             })
         }
         Err(e) => Err(RunError::ParseError(format!("{:?}", e))),
@@ -725,7 +774,7 @@ impl<'a> fmt::Display for ContextTerm<'a> {
                     "(lambda {}:{}. {})",
                     b1,
                     ContextType {
-                        context: &ctx1.clone(),
+                        context: self.context,
                         typ: ty_t1,
                     },
                     ContextTerm {
@@ -804,7 +853,7 @@ impl<'a> fmt::Display for ContextType<'a> {
                     }
                 )
             }
-            Type::Var(x, _) => {
+            Type::Var(x, n) => {
                 match index_to_name(self.context.clone(), x) {
                     Ok(n) => write!(f, "{}", n),
                     Err(e) => write!(f, "{:?}", e),
