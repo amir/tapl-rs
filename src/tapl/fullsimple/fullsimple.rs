@@ -696,8 +696,7 @@ pub fn repl(s: &str, ctx: Context) -> Result<(String, Context), RunError> {
 mod parser_tests {
     use super::Context;
     use tapl::fullsimple::parser;
-    use tapl::fullsimple::ast::Term;
-    use tapl::fullsimple::ast::Type;
+    use tapl::fullsimple::ast::{Command, Binding, BindingType, Term, Type};
 
     #[test]
     fn a_term() {
@@ -733,6 +732,21 @@ mod parser_tests {
             Ok(Term::TimesFloat(
                 Box::new(Term::Float(11.1)),
                 Box::new(Term::Float(12.2)),
+            ))
+        );
+        assert_eq!(
+            (parser::parse_Command("T=Nat").ok().unwrap())(Context::new()),
+            Ok((
+                Command::Bind(Binding {
+                    label: "T".to_string(),
+                    binding: BindingType::TypeAbbBind(Type::Nat),
+                }),
+                vec![
+                    Binding {
+                        label: "T".to_string(),
+                        binding: BindingType::NameBind,
+                    },
+                ],
             ))
         );
     }
