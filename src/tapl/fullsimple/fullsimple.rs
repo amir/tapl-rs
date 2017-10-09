@@ -749,6 +749,14 @@ mod parser_tests {
                 ],
             ))
         );
+        assert_eq!(
+            (parser::parse_Term("let x=true in x").ok().unwrap())(Context::new()),
+            Ok(Term::Let(
+                "x".to_string(),
+                Box::new(Term::True),
+                Box::new(Term::Var(0, 1)),
+            ))
+        );
     }
 }
 
